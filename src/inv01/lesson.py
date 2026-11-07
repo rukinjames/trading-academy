@@ -1,4 +1,4 @@
-"""Investing Week 1. Eight million dollars of patience.
+"""Unit 2, investing lane. Eight million dollars of patience.
 
 Color meanings for the whole lesson. One color, one meaning. Where they overlap with the trading
 lessons they mean the same thing there.
@@ -215,7 +215,7 @@ pe = [19 + 6 * math.sin(t / 4.2) + random.uniform(-1.5, 1.5) for t in range(31)]
 lr = [e * p for e, p in zip(eps, pe)]
 long_ = chart(lr, [e * 19 for e in eps], "Year 0", "Year 30", 0, 1000, "Thirty years", [0, 250, 500, 750, 1000], "Earnings per share × 19")
 TOGGLES["runs"] = [
-    ("Twenty days", short, "Over a month, the company's earnings do not change at all, so the green line is flat. The price still zigzags up and down every day. Almost all of that is the order book from Trading Week 1, orders arriving and leaving, not a change in the business."),
+    ("Twenty days", short, "Over a month, the company's earnings do not change at all, so the green line is flat. The price still zigzags up and down every day. Almost all of that is the order book from Unit 1, orders arriving and leaving, not a change in the business."),
     ("Thirty years", long_, "Over thirty years the earnings grow about 7% a year, and the green line, earnings times a steady multiple of 19, climbs with them. The gold price swings above and below it, sometimes for years. This made up company's multiple was built to wander around 19 and come back. That is the model from the aside above. Real multiples have mostly behaved this way over the last century, but nothing forces them to."),
 ]
 
@@ -388,6 +388,18 @@ EXTRA_CSS = r"""
 .grow .stk i{border-radius:0}
 .grow .stk i:first-child{border-radius:3px 0 0 3px}
 .grow .stk i.dv{background:var(--k5);border-radius:0 3px 3px 0}
+.plan{margin:1rem 0 0;font-size:.95rem}
+.plan .planh{font-family:var(--sans);font-weight:700;font-size:.9rem;margin:0 0 .35rem}
+.plan ol{padding-left:1.4rem;margin:0}
+.plan li{margin:.3rem 0}
+.sitting{margin:3.4rem 0 0;padding:1rem 1.25rem;border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:10px;background:var(--card);font-family:var(--sans)}
+.sitting p{margin:0;font-size:.95rem;color:var(--muted);line-height:1.5}
+.sitting p.sitn{margin:0 0 .35rem;font-size:1.1rem;font-weight:700;color:var(--accent)}
+.resume{margin:1.4rem 0 0;padding:.9rem 1.2rem;border:1px solid var(--accent);border-radius:10px;background:var(--wonder);font-family:var(--sans);font-size:.95rem;line-height:1.5}
+.resume p{margin:.15rem 0}
+.resume .ra{margin-top:.55rem}
+.resume a.go{font-weight:700;color:var(--accent)}
+.resume a.clear{color:var(--muted);margin-left:1.4rem}
 """
 
 EXTRA_JS = r"""
@@ -444,11 +456,87 @@ EXTRA_JS = r"""
     var v=b.getAttribute('data-v');st[grp]=(grp==='div')?v:+v;run();});
   run();
 })();
+// saved progress. Answers, furthest step and sitting, kept in this browser
+(function(){try{
+  var ID='inv01',KEY='ta.lesson.'+ID,SUM='ta.lessonprogress',stop=false,restoring=false;
+  function get(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}}
+  function put(k,v){if(stop)return;try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function $$(s){return [].slice.call(document.querySelectorAll(s));}
+  var st=get(KEY);if(!st||typeof st!=='object')st={};
+  if(!st.ans||typeof st.ans!=='object')st.ans={};
+  st.far=+st.far||0;
+  var qs=$$('.quiz .q'),seen={};
+  function hash(s){var h=5381;for(var i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36);}
+  var ids=qs.map(function(q){var t=(q.querySelector('.qt')||q).textContent.replace(/\s+/g,' ').trim(),h=hash(t);seen[h]=(seen[h]||0)+1;return seen[h]>1?h+'.'+seen[h]:h;});
+  var steps=$$('h3[id^="s"]').filter(function(h){return /^s\d+$/.test(h.id);});
+  var divs=$$('.sitting'),of=divs.length+1;
+  function sitOf(el){var k=1;divs.forEach(function(d){if(d.compareDocumentPosition(el)&4)k++;});return k;}
+  function stepEl(n){return document.getElementById('s'+n);}
+  // recap quizzes say what they recap
+  divs.forEach(function(d){var n=d.nextElementSibling;if(n&&n.classList.contains('quiz')){var h=n.querySelector('.qh');if(h)h.textContent='Recap of sitting '+(+d.getAttribute('data-sit')-1);}});
+  function answered(){var a=0;ids.forEach(function(id){if(st.ans[id]!=null)a++;});return a;}
+  function sitting(){
+    var k=1,el=st.far?stepEl(st.far):null;if(el)k=sitOf(el);
+    qs.forEach(function(q,i){if(st.ans[ids[i]]!=null)k=Math.max(k,sitOf(q));});
+    return k;
+  }
+  // a sitting is done when the recap of it, at the next divider, is fully answered. The last sitting is done when every question in it is answered
+  function isAns(q){return st.ans[ids[qs.indexOf(q)]]!=null;}
+  function done(){var d=0;
+    for(var k=1;k<=of;k++){var set;
+      if(k<of){var n=divs[k-1].nextElementSibling;set=(n&&n.classList.contains('quiz'))?[].slice.call(n.querySelectorAll('.q')):[];}
+      else set=qs.filter(function(q){return sitOf(q)===of;});
+      if(set.length&&set.every(isAns))d++;}
+    return d;}
+  function save(){
+    put(KEY,st);
+    var all=get(SUM);if(!all||typeof all!=='object')all={};
+    var cur=all[ID],d=done();
+    if(!cur||cur.done!==d||cur.total!==of){all[ID]={done:d,total:of,updated:new Date().toISOString().replace(/\.\d{3}Z$/,'Z')};put(SUM,all);}
+  }
+  var had=st.far>1||answered()>0;
+  // put answered quizzes back by replaying the same clicks through the page's own quiz code
+  restoring=true;
+  qs.forEach(function(q,i){var o=st.ans[ids[i]];if(o==null||q.getAttribute('data-done'))return;var b=q.querySelector('button[data-o="'+o+'"]');if(b)b.click();});
+  restoring=false;
+  document.addEventListener('click',function(e){
+    if(restoring)return;var b=e.target.closest&&e.target.closest('.quiz .q button[data-o]');if(!b)return;
+    var q=b.closest('.q'),i=qs.indexOf(q);if(i<0||!q.getAttribute('data-done')||st.ans[ids[i]]!=null)return;
+    st.ans[ids[i]]=b.getAttribute('data-o');save();
+  });
+  // furthest step reached
+  var tick=false;
+  function track(){tick=false;var n=0,lim=window.innerHeight*0.5;
+    for(var i=0;i<steps.length;i++){if(steps[i].getBoundingClientRect().top<lim)n=+steps[i].id.slice(1);else break;}
+    if(n>st.far){st.far=n;save();}}
+  window.addEventListener('scroll',function(){if(!tick){tick=true;requestAnimationFrame(track);}},{passive:true});
+  // pick up where you left off
+  if(had){
+    var n=Math.max(st.far,1),el=stepEl(n);
+    if(el){
+      var sec=el.closest('section'),h2=sec&&sec.querySelector('h2');
+      var ch=sec?'Chapter '+sec.getAttribute('data-part')+', '+h2.textContent.replace(/^\s*Chapter \d+\s*/,'').trim():'';
+      var stt=el.textContent.replace(/^\s*Step \d+\.\s*/,'').trim();
+      var box=document.createElement('div');box.className='resume';box.id='resume';
+      box.innerHTML='<p><b>Pick up where you left off.</b> <span class="rw"></span></p><p class="ra"><a class="go" href="#s'+n+'"></a><a class="clear" href="#">Start over</a></p>';
+      box.querySelector('.rw').textContent=ch+'. Step '+n+', '+stt+(/[.?!]$/.test(stt)?'':'.')+' Sitting '+sitting()+' of '+of+', with '+answered()+' of '+qs.length+' questions answered.';
+      box.querySelector('.go').textContent='Go to Step '+n;
+      box.querySelector('.clear').addEventListener('click',function(e){e.preventDefault();
+        stop=true;
+        try{localStorage.removeItem(KEY);var all=get(SUM);if(all&&typeof all==='object'){delete all[ID];localStorage.setItem(SUM,JSON.stringify(all));}}catch(x){}
+        try{history.replaceState(null,'',location.pathname+location.search);if('scrollRestoration' in history)history.scrollRestoration='manual';}catch(x){}
+        window.scrollTo(0,0);location.reload();});
+      var toc=document.getElementById('contents');
+      if(toc)toc.parentNode.insertBefore(box,toc);
+    }
+  }
+  save();
+}catch(err){}})();
 // link back to the academy hub
 (function(){var bar=document.querySelector('.bar .in');if(!bar)return;var a=document.createElement('a');a.href='../index.html';a.textContent='Academy';bar.insertBefore(a,bar.firstChild);})();
 """
 
-TITLE = "Eight million dollars of patience. Trading Academy, Investing Week 1"
-BAR = "Investing 1"
+TITLE = "Eight million dollars of patience. Trading Academy, Unit 2"
+BAR = "Unit 2"
 OUT = "inv01.html"
 CONTENT = ["content-1.html", "content-2.html"]

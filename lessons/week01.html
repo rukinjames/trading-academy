@@ -803,7 +803,7 @@ details p{margin:0;padding:0 1rem 1rem;color:var(--ink)}
   document.addEventListener('click',function(e){
     if(restoring)return;var b=e.target.closest&&e.target.closest('.quiz .q button[data-o]');if(!b)return;
     var q=b.closest('.q'),i=qs.indexOf(q);if(i<0||!q.getAttribute('data-done')||st.ans[ids[i]]!=null)return;
-    st.ans[ids[i]]=+b.getAttribute('data-o');save();
+    st.ans[ids[i]]=b.getAttribute('data-o');save();
   });
   // furthest step reached
   var tick=false;
@@ -820,7 +820,7 @@ details p{margin:0;padding:0 1rem 1rem;color:var(--ink)}
       var stt=el.textContent.replace(/^\s*Step \d+\.\s*/,'').trim();
       var box=document.createElement('div');box.className='resume';box.id='resume';
       box.innerHTML='<p><b>Pick up where you left off.</b> <span class="rw"></span></p><p class="ra"><a class="go" href="#s'+n+'"></a><a class="clear" href="#">Start over</a></p>';
-      box.querySelector('.rw').textContent=ch+'. Step '+n+', '+stt+'. Sitting '+sitting()+' of '+of+', with '+answered()+' of '+qs.length+' questions answered.';
+      box.querySelector('.rw').textContent=ch+'. Step '+n+', '+stt+(/[.?!]$/.test(stt)?'':'.')+' Sitting '+sitting()+' of '+of+', with '+answered()+' of '+qs.length+' questions answered.';
       box.querySelector('.go').textContent='Go to Step '+n;
       box.querySelector('.clear').addEventListener('click',function(e){e.preventDefault();
         stop=true;

@@ -1,3 +1,23 @@
+[[CLOSE]]
+<div class="sitting" id="sit3" data-sit="3"><p class="sitn">Sitting 3 of 4, about 40 minutes</p><p>Three questions on sitting 2 before you go on. Your answers and your place are saved, so a divider is a good place to stop or to start.</p></div>
+[[MCQ
+Q: You buy 1 ES contract with a market order and immediately sell it with another market order. The price never moved. What happened to your account, before fees?
+- You broke even, because the price never moved while you held the contract
++ You lost the spread, because you bought at the ask and sold at the bid
+- You lost nothing, because a market order always fills at the last price
+F: A market buy trades at the ask and a market sell trades at the bid. The round trip costs the gap between them even if the price never moves, and fees come on top. The spread is the price of being in a hurry.
+Q: Why does a resting limit buy tend to get filled on the moves that go against you?
++ It fills when sellers are hitting the bids hard, which is often right before the price goes lower
+- The exchange always fills limit orders last, after every market order in the line has filled
+- Market makers can see your order and choose to fill it only when they expect the price to drop
+F: This is adverse selection. Your buy fills when somebody sells to you, and that happens most when sellers are in a hurry, which is exactly when the price tends to keep falling. The moves that go your way often leave without you.
+Q: You are long with a stop sell triggered at 5,995.00. Nothing has traded at 5,995.00 yet. Then a trade prints at 5,994.75. What happens to your stop?
+- Nothing yet, because no trade printed at exactly 5,995.00
+- It becomes a limit sell that waits in the book at 5,995.00
++ It becomes a market sell, because a trade printed beyond the trigger
+F: A stop wakes up when a trade prints at the trigger price or beyond it, so 5,994.75 counts. It then becomes a market order and sells into whatever bids are left, on CME within its protection limit. A stop limit is the order that would rest as a limit instead.
+]]
+
 [[CH sides|Who is on the other side]]
 
 [[STEP aggressor|Equal amounts, unequal hurry]]
@@ -104,6 +124,26 @@ Q: Which order type protected sellers from being filled at one cent, and what di
 F: A limit sell at, say, $39.00 can never fill below $39.00. On May 6 it would not have traded at one cent. The price of that protection is that if the price falls through your limit and keeps going, you are still holding the shares. A market order never fills at the last price on the screen. It fills at the best bid that exists, which is the whole lesson.
 ]]
 
+[[CLOSE]]
+<div class="sitting" id="sit4" data-sit="4"><p class="sitn">Sitting 4 of 4, about 35 minutes</p><p>Three questions on sitting 3 before you go on. Your answers and your place are saved, so a divider is a good place to stop or to start.</p></div>
+[[MCQ
+Q: A trade prints at the best bid. Who was the aggressor?
+- The buyer, whose bid had been resting there first
++ The seller, who arrived and sold to the waiting bid, also called the taker
+- Neither side, because a trade at the bid has no aggressor
+F: The bid is where buyers wait. A trade there means a seller crossed the spread and hit a waiting bid, so the seller started the trade. Aggressor and taker point at the same trader.
+Q: In ES, where does the spread that takers pay end up?
++ With the makers whose waiting orders they traded against, so it stays inside the market
+- With the exchange, which keeps it as part of the fee it charges on every single trade
+- Nowhere, because the spread is only a gap on the screen and nobody ever actually pays it
+F: Fees leave the market and go to the exchange and brokers. The spread moves from the takers who pay it to the makers who earn it. That is why ES is zero sum before fees and negative sum after.
+Q: On April 7, 2025, ES volume was about double its usual level. Why was that no comfort to a trader who needed to sell a lot at once?
+- High volume makes the exchange slow down matching, so big orders wait longer to fill
+- Volume that high means the spread is wider, and the spread is the only cost that matters
++ The size waiting at the front of the book was down by about two thirds, so a big order walked further
+F: Volume counts how much traded. Liquidity is how much is waiting in the book to absorb the next order. On May 6 and again on April 7, 2025, volume was huge while the waiting size shrank, and a big market order walks further in a book like that however busy the tape looks.
+]]
+
 [[CH charts|What your chart is made of]]
 
 [[STEP candle|A chart is a summary of the tape]]
@@ -139,8 +179,8 @@ F: The open and the close are both 6,010.00, so the body has no height and the c
 <p>Here are two different minutes of trading. Flip between them and compare the paths on the left, then compare the candles on the right.</p>
 [[TOGGLE paths]]
 <p>Here is what just happened. In minute A buyers won early, lost the middle, and won the end. In minute B sellers won the first ten seconds, buyers won the middle, and sellers took a little back at the end. Those are opposite stories, and they produce exactly the same candle, because both have the same open, high, low and close.</p>
-<p>A candle also hides everything you spent this week learning. It does not show the book. It does not show who was the aggressor. It does not show the stops waiting below, or whether the volume was real buyers or HFTs passing a hot potato. A one minute candle drawn from that afternoon's raw trades in Accenture would show a wick down to one cent. Charts built after the trades were cancelled may not show it at all. Either way, nothing in the candle tells you the cause.</p>
-<p>That is not a reason to ignore charts. It is the reason this course will treat every chart pattern you learn in Weeks 4 to 7 as a claim to be tested on data, not a fact to be believed. When a video tells you what a candle shape means, remember that the shape is four numbers, and the story is a guess about a path nobody drew.</p>
+<p>A candle also hides everything you spent this unit learning. It does not show the book. It does not show who was the aggressor. It does not show the stops waiting below, or whether the volume was real buyers or HFTs passing a hot potato. A one minute candle drawn from that afternoon's raw trades in Accenture would show a wick down to one cent. Charts built after the trades were cancelled may not show it at all. Either way, nothing in the candle tells you the cause.</p>
+<p>That is not a reason to ignore charts. It is the reason this course will treat every chart pattern you learn in the chart units, from Unit 6 to Unit 11, as a claim to be tested on data, not a fact to be believed. When a video tells you what a candle shape means, remember that the shape is four numbers, and the story is a guess about a path nobody drew.</p>
 
 [[CH alone|On your own]]
 
@@ -180,7 +220,7 @@ F: Joining the bid saves you the spread, but you go to the back of the line at 6
 ]]
 
 [[STEP mixed|Mixed questions, the way the exam asks them]]
-<p>The weekly exam mixes everything, so this last set does too. Answer each one before reading the feedback.</p>
+<p>The unit exam mixes everything, so this last set does too. Answer each one before reading the feedback.</p>
 [[MCQ
 Q: Which of these would most likely make the ES spread widen?
 - A quiet lunch hour with steady two way trading
@@ -219,5 +259,5 @@ F: The close is below the open, so it is filled. The high is above the open, so 
 <h2>The whole story in one breath</h2>
 <p>A price is only the last trade between a buyer and a seller. Most of the time one of them was waiting in the order book with a limit order and the other arrived with a market order and crossed the spread. Prices move when takers eat through the waiting orders, and they move furthest when the book is thin. On May 6, 2010, a seller who ignored price met a book that market makers had emptied, stop orders turned into market orders, and a share of Accenture sold for one cent because one cent was the best bid left.</p>
 <h2>Before the exam, teach it back</h2>
-<p>Open the Academy page and write, in your own words, how a forty dollar share traded for one cent. Explain it to someone who has never heard the words bid, ask, spread, limit order or stop, defining each one as you use it. Then paste it to Claude to be graded before you take the Week 1 exam.</p>
+<p>Open the Academy page and write, in your own words, how a forty dollar share traded for one cent. Explain it to someone who has never heard the words bid, ask, spread, limit order or stop, defining each one as you use it. Then paste it to Claude to be graded before you take the Unit 1 exam.</p>
 </section>
