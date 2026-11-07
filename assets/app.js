@@ -7,7 +7,7 @@
   // ------------------------------------------------------------------ state
   function fresh() {
     return { v: 1, created: Date.now(), diag: null, weeks: {}, journal: [], qstats: {},
-      settings: { dailyLossR: 3, maxTrades: 4 } };
+      settings: { dailyLossR: 3, maxTrades: 4, costRT: 1.5, slipTicks: 1 } };
   }
   // Older saves keyed weeks 1, 2, 3 and question stats by bare id. Both now belong to the trading track.
   function migrate(s) {
@@ -18,6 +18,9 @@
       s.mig = 2;
     }
     s.deleted = s.deleted || [];
+    s.settings = s.settings || {};
+    if (s.settings.costRT == null) s.settings.costRT = 1.5;
+    if (s.settings.slipTicks == null) s.settings.slipTicks = 1;
     s.updated = s.updated || s.created || Date.now();
     return s;
   }
@@ -40,7 +43,11 @@
   function bank(id) { return TA.BANKS && TA.BANKS[id]; }
   function track(t) { return TA.TRACKS.filter(function (x) { return x.id === t; })[0]; }
   function trackWeeks(t) { return TA.WEEKS.filter(function (w) { return w.track === t; }); }
-  function lbl(id) { var w = week(id); return track(w.track).short + " Week " + w.n; }
+  function unitNo(id) { return TA.ORDER.indexOf(id) + 1; }
+  function lbl(id) { return "Unit " + unitNo(id); }
+  function lane(id) { var w = week(id); return track(w.track).name; }
+  function laneTag(id) { var w = week(id); return '<span class="lanetag lane-' + w.track + '">' + esc(track(w.track).short) + "</span>"; }
+  function blockOf(id) { var k = unitNo(id); return TA.BLOCKS.filter(function (b) { return k >= b.from && k <= b.to; })[0]; }
   function phaseOf(w) { return track(w.track).phases[w.phase - 1]; }
   function wid(p) { var k = (p && p[0]) || "t1"; return /^\d+$/.test(k) ? "t" + k : k; }
   function sib(id, d) { var w = week(id); return w ? week(w.track + (w.n + d)) : null; }
@@ -177,15 +184,70 @@
   }
   function gatesDone(n) { var w = week(n); return !w.gates || w.gates.every(function (g) { return gateStatus(g).ok; }); }
   function completed(n) { var w = week(n); return !!(w && w.lesson && bank(n) && W(n).passed && tasksDone(n) && gatesDone(n)); }
-  function unlocked(n) { var w = week(n); return !!w && (w.n === 1 || completed(sib(n, -1).id)); }
-  function currentWeek(t) { var ws = trackWeeks(t); for (var i = 0; i < ws.length; i++) if (!completed(ws[i].id)) return ws[i].id; return ws[ws.length - 1].id; }
+  // Parked means the exam and tasks are done and only a journal trade count is missing.
+  function parked(id) { var w = week(id); return !!(w && w.track === "t" && w.lesson && bank(id) && W(id).passed && tasksDone(id) && !gatesDone(id)); }
+  function unlocked(id) {
+    var k = TA.ORDER.indexOf(id); if (k < 0) return false;
+    for (var j = 0; j < k; j++) {
+      var e = TA.ORDER[j];
+      if (completed(e)) continue;
+      if (parked(e) && week(id).track === "i") continue;
+      return false;
+    }
+    return true;
+  }
+  function currentWeek() {
+    for (var i = 0; i < TA.ORDER.length; i++) { var id = TA.ORDER[i]; if (!completed(id) && unlocked(id) && !parked(id)) return id; }
+    for (var j = 0; j < TA.ORDER.length; j++) if (!completed(TA.ORDER[j])) return TA.ORDER[j];
+    return TA.ORDER[TA.ORDER.length - 1];
+  }
+  function waitingOn() { return TA.ORDER.filter(function (id) { return parked(id); }); }
+  function passedUnits() { return TA.ORDER.filter(function (id) { return W(id).passed && bank(id); }); }
+
+  // Two static items per topic are kept for the exam only, and never shown in practice, pretests or review.
+  var SEALED = {};
+  function sealed(id) {
+    if (SEALED[id]) return SEALED[id];
+    var b = bank(id), out = {}, by = {};
+    if (b) {
+      b.items.forEach(function (it) { if (!it.gen) (by[it.topic] = by[it.topic] || []).push(it.id); });
+      Object.keys(by).forEach(function (t) { var ids = by[t].slice().sort(); if (ids.length >= 5) { out[ids[1]] = 1; out[ids[ids.length - 2]] = 1; } });
+    }
+    return (SEALED[id] = out);
+  }
+  function openItems(id) { var b = bank(id), sl = sealed(id); return b ? b.items.filter(function (it) { return !sl[it.id]; }) : []; }
+
+  // Spaced review. Each topic of a passed unit sits in a box. Right answers move it up a box, misses send it back to box 0.
+  var BOX_DAYS = [1, 3, 7, 21, 60];
+  function dayStart(t) { var d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); }
+  function inDays(n) { return dayStart(Date.now()) + n * 86400000; }
+  function schedule(id) {
+    S.rq = S.rq || {};
+    var b = bank(id); if (!b) return;
+    Object.keys(b.topics).forEach(function (t) { var k = id + "|" + t; if (!S.rq[k]) S.rq[k] = { box: 0, due: inDays(1) }; });
+  }
+  function dueTopics() {
+    S.rq = S.rq || {};
+    var now = Date.now();
+    return Object.keys(S.rq).filter(function (k) { return S.rq[k].due <= now && bank(k.split("|")[0]); }).sort(function (a, b) { return S.rq[a].due - S.rq[b].due; }).slice(0, 12);
+  }
+  function review(k, ok) {
+    var r = S.rq[k]; if (!r) return;
+    r.box = ok ? Math.min(r.box + 1, BOX_DAYS.length - 1) : 0;
+    r.due = inDays(ok ? BOX_DAYS[r.box] : 1);
+  }
+  function pickFrom(id, topic, avoid) {
+    var pool = openItems(id).filter(function (it) { return it.topic === topic && (!avoid || !avoid[it.id]); });
+    if (!pool.length) pool = bank(id).items.filter(function (it) { return it.topic === topic; });
+    return R.pick(pool);
+  }
 
   // The five steps of a week, for display. Practice is open at any time and never blocks.
   function steps(n) {
     var w = week(n), st = W(n), b = bank(n);
     var seen = b ? b.items.filter(function (it) { return S.qstats[qkey(n, it.id)]; }).length : 0;
     var s = [
-      { k: "floor", label: "Find your floor", done: !!st.pretest, href: "#/pretest/" + n },
+      { k: "floor", label: "Find your floor", done: !!st.pretest, href: "#/pretest/" + n, mins: "5 min" },
       { k: "lesson", label: "Lesson", done: !!st.tasks.read, href: w.lesson || ("#/week/" + n) },
       { k: "practice", label: "Practice", open: true, href: "#/practice/" + n, note: b ? (seen + " of " + b.items.length + " seen") : "" },
       { k: "tasks", label: "Tasks", done: tasksDone(n), href: "#/week/" + n },
@@ -245,7 +307,7 @@
   function nav() {
     var h = location.hash.replace(/^#\/?/, "") || "home";
     var parts = h.split("/");
-    var section = { week: "home", pretest: "home", practice: "home", review: "home", exam: "home", diagnostic: "home", diagresult: "home" }[parts[0]] || parts[0];
+    var section = { week: "home", pretest: "home", practice: "home", review: "home", exam: "home", diagnostic: "home", diagresult: "home", daily: "home" }[parts[0]] || parts[0];
     document.querySelectorAll(".nav a").forEach(function (a) { a.classList.toggle("on", a.getAttribute("data-r") === section); });
     var fn = routes[parts[0]] || routes.home;
     window.scrollTo(0, 0);
@@ -259,97 +321,103 @@
 
   // ------------------------------------------------------------------ home
   routes.home = function () {
-    var h = head("Trading Academy", "Two tracks, one rule", "Day trading and investing run side by side. Each week in each track needs a 100% exam before the next one opens. Study whichever you like on a given day.");
-    TA.TRACKS.forEach(function (T) {
-      var cur = currentWeek(T.id), w = week(cur);
-      h += '<section class="next track-' + T.id + '" aria-label="' + esc(T.name) + ' next step"><p class="trackname">' + esc(T.name) + ", week " + w.n + " of " + trackWeeks(T.id).length + '</p><h2 class="tt2">' + esc(w.title) + "</h2>" + (w.lesson && bank(cur) ? pathHTML(cur) : "") + '<div class="nextbody">' + nextAction(cur) + "</div></section>";
+    var cur = currentWeek(), w = week(cur), due = dueTopics(), wait = waitingOn();
+    var h = head("Trading Academy", "One path, two lanes", "Nineteen units in the order the ideas build on each other, alternating day trading and investing. Every unit needs a 100% exam before the next one opens.");
+    if (due.length) h += '<section class="today"><div><h2>Today\'s review</h2><p>' + due.length + " question" + (due.length > 1 ? "s" : "") + " from units you passed, about " + Math.max(2, Math.round(due.length * 0.75)) + ' min. Do this first.</p></div><a class="btn pri" href="#/daily">Start review</a></section>';
+    h += '<section class="next lane-' + w.track + '" aria-label="Up next"><p class="trackname">Up next. ' + esc(lbl(cur)) + " of " + TA.ORDER.length + ", " + esc(lane(cur).toLowerCase()) + ' lane</p><h2 class="tt2">' + esc(w.title) + "</h2>" + (w.lesson && bank(cur) ? pathHTML(cur) : "") + '<div class="nextbody">' + nextAction(cur) + "</div></section>";
+    wait.forEach(function (id) {
+      var g = (week(id).gates || []).map(function (x) { return x.label + ", " + gateStatus(x).val; }).join(". ");
+      h += '<p class="waiting">' + esc(lbl(id)) + ", " + esc(week(id).title) + ", is waiting only on logged trades. " + esc(g) + ". The investing units keep moving while they pile up.</p>";
     });
-    if (!S.diag) {
-      h += '<aside class="diag"><div><h2>Take the trading diagnostic</h2><p>24 questions across all 12 trading weeks. It never lets you skip a week. It shows where your picture of trading starts, so the lessons can start there too. Guess freely and be honest about it.</p></div><a class="btn" href="#/diagnostic">Start the diagnostic</a></aside>';
-    } else {
-      h += '<aside class="diag done"><div><h2>Trading diagnostic, ' + S.diag.score + " of " + S.diag.n + '</h2><p>Every week still needs its 100% exam.</p></div><a class="btn ghost" href="#/diagresult">See the breakdown</a></aside>';
+    h += planLine();
+    if (Date.now() < new Date(2027, 3, 16).getTime() && !W("i2").passed) {
+      h += '<aside class="roth"><h2>2026 Roth IRA contributions close April 15, 2027</h2><p>If you had earned income in 2026, a Roth IRA can take a 2026 contribution up to the lesser of $7,500 or what you earned, subject to income limits, until the April 15, 2027 tax deadline. Unit 4 explains how it works and what to decide.</p><a class="btn ghost" href="#/week/i2">See Unit 4</a></aside>';
     }
-    TA.TRACKS.forEach(function (T) {
-      var ws = trackWeeks(T.id), cur = currentWeek(T.id);
-      var done = ws.filter(function (x) { return completed(x.id); }).length;
-      h += '<section class="road track-' + T.id + '"><div class="sechead"><h2>' + esc(T.road) + '</h2><p class="count">' + done + " of " + ws.length + ' weeks done</p></div><p class="roadblurb">' + esc(T.blurb) + "</p>";
-      T.phases.forEach(function (p) {
-        var pw = ws.filter(function (x) { return x.phase === p.id; });
-        h += '<div class="phase"><div class="phasehead"><h3>Phase ' + p.id + ". " + esc(p.name) + "</h3><p>" + esc(p.blurb) + '</p></div><ol class="rail">';
-        pw.forEach(function (x) {
-          var isDone = completed(x.id), un = unlocked(x.id), isCur = x.id === cur && !isDone;
-          var cls = isDone ? "done" : isCur ? "now" : un ? "todo" : "locked";
-          var status = isDone ? "Done" : isCur ? (x.lesson ? "You are here" : "Ready to be built") : !un ? "Locked" : "Open";
-          h += '<li class="' + cls + '"><a href="#/week/' + x.id + '"><span class="node" aria-hidden="true">' + (isDone ? CHECK : !un ? LOCK : "") + '</span><span class="wn">' + x.n + '</span><span class="wt"><b>' + esc(x.title) + "</b><span>" + esc(x.topic) + '</span></span><span class="ws">' + status + "</span></a></li>";
-        });
-        h += "</ol></div>";
+    if (!S.diag) {
+      h += '<aside class="diag"><div><h2>Take the trading diagnostic</h2><p>24 questions across the trading lane. It never lets you skip a unit. It shows where your picture of trading starts, so the lessons can start there too. Guess freely and be honest about it.</p></div><a class="btn" href="#/diagnostic">Start the diagnostic</a></aside>';
+    } else {
+      h += '<aside class="diag done"><div><h2>Trading diagnostic, ' + S.diag.score + " of " + S.diag.n + '</h2><p>Every unit still needs its 100% exam.</p></div><a class="btn ghost" href="#/diagresult">See the breakdown</a></aside>';
+    }
+    var done = TA.ORDER.filter(function (x) { return completed(x); }).length;
+    h += '<section class="road"><div class="sechead"><h2>The path</h2><p class="count">' + done + " of " + TA.ORDER.length + ' units done</p></div><p class="roadblurb">Blue tags are the trading lane, green tags the investing lane.</p>';
+    TA.BLOCKS.forEach(function (bl, bi) {
+      h += '<div class="phase"><div class="phasehead"><h3>Block ' + "ABCD"[bi] + ". " + esc(bl.name) + "</h3><p>" + esc(bl.blurb) + '</p></div><ol class="rail">';
+      TA.ORDER.slice(bl.from - 1, bl.to).forEach(function (id) {
+        var x = week(id), isDone = completed(id), un = unlocked(id), isCur = id === cur && !isDone, isPark = parked(id);
+        var cls = isDone ? "done" : isCur ? "now" : un ? "todo" : "locked";
+        var status = isDone ? "Done" : isPark ? "Waiting on trades" : isCur ? (x.lesson ? "You are here" : "Ready to be built") : !un ? "Locked" : "Open";
+        h += '<li class="' + cls + '"><a href="#/week/' + id + '"><span class="node" aria-hidden="true">' + (isDone ? CHECK : !un ? LOCK : "") + '</span><span class="wn">' + unitNo(id) + '</span><span class="wt"><b>' + esc(x.title) + "</b><span>" + laneTag(id) + " " + esc(x.topic) + '</span></span><span class="ws">' + status + "</span></a></li>";
       });
-      h += "</section>";
-      if (T.id === "t") h += gatePanel();
+      h += "</ol></div>";
     });
+    h += "</section>";
+    h += gatePanel();
     h += '<p class="foot" id="syncfoot">' + Sync.footer() + "</p>";
     app.innerHTML = h;
   };
+
+  function planLine() {
+    var set = S.settings, left = TA.ORDER.filter(function (x) { return !completed(x); }).length;
+    if (!(set.hours > 0)) return '<p class="plan">How many hours a week can you give this? Set it in <a href="#/settings">Settings</a> and the path will show when you should reach each block.</p>';
+    var weeks = Math.ceil(left * TA.UNIT_HOURS / set.hours), d = new Date(Date.now() + weeks * 7 * 86400000);
+    return '<p class="plan">' + left + " units left at about " + TA.UNIT_HOURS + " hours each. At " + set.hours + " hours a week that is about " + weeks + " weeks, so around " + d.toLocaleDateString([], { month: "long", year: "numeric" }) + ", not counting the weeks of logged trades the forward test needs.</p>";
+  }
 
   function nextAction(n) {
     var w = week(n), st = W(n);
     var line = function (title, body, btn) { return '<h2 class="nt">' + title + '</h2><p class="nb">' + body + "</p>" + (btn ? '<div class="row">' + btn + "</div>" : ""); };
     if (!w.lesson || !bank(n)) {
-      return line(lbl(n) + " is ready to be built", (w.n > 1 ? "You passed everything before it. " : "") + "Tell Claude <b>Build " + lbl(n) + "</b>. It will be written around what you got wrong so far.", '<a class="btn" href="#/week/' + n + '">See what it covers</a>');
+      return line(lbl(n) + " is ready to be built", (unitNo(n) > 1 ? "You passed everything before it. " : "") + "Tell Claude <b>Build " + lbl(n) + "</b>. It will be written around what you got wrong so far.", '<a class="btn" href="#/week/' + n + '">See what it covers</a>');
     }
-    if (!st.pretest) return line("Find your floor", "Five questions before you read anything. Wrong answers are expected and useful, they show where the lesson should start for you.", '<a class="btn pri" href="#/pretest/' + n + '">Start 5 questions</a>');
-    if (!st.tasks.read) return line("Read the lesson", "Read every chapter and answer every green box. Then tick it off on the week page.", '<a class="btn pri" href="' + w.lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a>');
-    if (!tasksDone(n)) return line("Finish this week's tasks", "Practice as much as you like while you work through them.", '<a class="btn pri" href="#/week/' + n + '">Open the tasks</a><a class="btn" href="#/practice/' + n + '">Practice questions</a>');
-    if (st.review && st.review.length) return line("Clear your misses before retaking", st.review.length + " question" + (st.review.length > 1 ? "s" : "") + " from your last attempt, with fresh numbers.", '<a class="btn pri" href="#/review/' + n + '">Clear misses</a>');
-    if (!st.passed) return line("Take the " + lbl(n) + " exam", bank(n).examSize + " questions drawn at random. You need every one right to " + (sib(n, 1) ? "unlock " + lbl(sib(n, 1).id) : "finish the track") + ".", '<a class="btn pri" href="#/exam/' + n + '">Take the exam</a><a class="btn" href="#/practice/' + n + '">Practice first</a>');
-    if (!gatesDone(n)) return line("Finish the journal requirements", "This week also needs logged trades. See the week page.", '<a class="btn pri" href="#/week/' + n + '">Week page</a>');
+    if (!st.pretest) return line("Find your floor", "Five questions before you read anything, about 5 minutes. Wrong answers are expected and useful, they show where the lesson should start for you.", '<a class="btn pri" href="#/pretest/' + n + '">Start 5 questions</a>');
+    if (!st.tasks.read) return line("Read the lesson", "It is split into sittings of 30 to 45 minutes, and it remembers where you stopped. Answer every green box, then tick it off on the unit page.", '<a class="btn pri" href="' + w.lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Unit page</a>');
+    if (!tasksDone(n)) return line("Finish this unit's tasks", "Practice as much as you like while you work through them.", '<a class="btn pri" href="#/week/' + n + '">Open the tasks</a><a class="btn" href="#/practice/' + n + '">Practice questions</a>');
+    if (st.review && st.review.length) return line("Clear your misses before retaking", st.review.length + " question" + (st.review.length > 1 ? "s" : "") + " on the same ideas you missed, asked a different way.", '<a class="btn pri" href="#/review/' + n + '">Clear misses</a>');
+    if (!st.passed && st.nextTry && Date.now() < st.nextTry) return line("Your next exam attempt opens tomorrow", "A night's sleep between attempts makes the retake measure what you know, not what you just read. Practice is open now.", '<a class="btn pri" href="#/practice/' + n + '">Practice</a>');
+    if (!st.passed) return line("Take the " + lbl(n) + " exam", "About 25 minutes. Every topic is tested, plus a few questions from earlier units. One slip can be redeemed, two cannot.", '<a class="btn pri" href="#/exam/' + n + '">Take the exam</a><a class="btn" href="#/practice/' + n + '">Practice first</a>');
+    if (!gatesDone(n)) return line("Finish the journal requirements", "This unit also needs logged trades. See the unit page.", '<a class="btn pri" href="#/week/' + n + '">Unit page</a>');
     return line(lbl(n) + " complete", "Everything is done.", "");
   }
 
-  // ------------------------------------------------------------------ week page
+  // ------------------------------------------------------------------ unit page
   routes.week = function (p) {
     var n = wid(p), w = week(n); if (!w) return go("#/");
-    var st = W(n), un = unlocked(n), b = bank(n), prev = sib(n, -1), next = sib(n, 1);
-    var h = '<a class="back" href="#/">All weeks</a>' + head(esc(lbl(n)) + ", " + esc(phaseOf(w).name), esc(w.title), esc(w.topic) + ".");
-    if (!un) h += '<div class="notice warn"><span class="ic">' + LOCK + "</span><p><b>Locked.</b> Finish " + esc(lbl(prev.id)) + " first. Its exam needs 100%.</p></div>";
-    h += '<section class="objectives"><h2>By the end of this week you can</h2><ul>' + w.objectives.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") + "</ul></section>";
+    var st = W(n), un = unlocked(n), b = bank(n), k = unitNo(n), next = TA.ORDER[k] || null, prev = TA.ORDER[k - 2] || null;
+    var h = '<a class="back" href="#/">The path</a>' + head(esc(lbl(n)) + " of " + TA.ORDER.length + ", " + esc(lane(n).toLowerCase()) + " lane, " + esc(blockOf(n).name.toLowerCase()), esc(w.title), esc(w.topic) + ".");
+    if (!un) h += '<div class="notice warn"><span class="ic">' + LOCK + "</span><p><b>Locked.</b> Finish " + esc(lbl(prev)) + " first. Its exam needs 100%.</p></div>";
+    h += '<section class="objectives"><h2>By the end of this unit you can</h2><ul>' + w.objectives.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") + "</ul></section>";
     if (!w.lesson || !b) {
-      h += '<div class="notice"><p><b>Not built yet.</b> Each week is written when you reach it, aimed at your mistakes so far. ' + (prev ? "When " + esc(lbl(prev.id)) + " is done, tell" : "Tell") + " Claude <b>Build " + esc(lbl(n)) + "</b>.</p></div>";
+      h += '<div class="notice"><p><b>Not built yet.</b> Each unit is written when you reach it, aimed at your mistakes so far. ' + (prev ? "When " + esc(lbl(prev)) + " is done, tell" : "Tell") + " Claude <b>Build " + esc(lbl(n)) + "</b>.</p></div>";
       app.innerHTML = h; return;
     }
     if (!un) { app.innerHTML = h; return; }
-    // unlock checklist
     var reqs = [["Exam passed at 100%", st.passed], ["All tasks done", tasksDone(n)]];
     (w.gates || []).forEach(function (g) { var gs = gateStatus(g); reqs.push([g.label + " (" + gs.val + ")", gs.ok]); });
     var met = reqs.filter(function (r) { return r[1]; }).length;
-    h += '<section class="unlock"><h2>' + (next ? "To unlock " + esc(lbl(next.id)) : "To finish the " + esc(track(w.track).name.toLowerCase()) + " track") + '</h2><p class="count">' + met + " of " + reqs.length + ' met</p><ul class="checks">' + reqs.map(function (r) { return '<li class="' + (r[1] ? "ok" : "") + '"><span class="tick">' + (r[1] ? CHECK : "") + "</span>" + esc(r[0]) + "</li>"; }).join("") + "</ul></section>";
+    h += '<section class="unlock"><h2>' + (next ? "To unlock " + esc(lbl(next)) : "To finish the path") + '</h2><p class="count">' + met + " of " + reqs.length + ' met</p><ul class="checks">' + reqs.map(function (r) { return '<li class="' + (r[1] ? "ok" : "") + '"><span class="tick">' + (r[1] ? CHECK : "") + "</span>" + esc(r[0]) + "</li>"; }).join("") + "</ul></section>";
 
     var S5 = steps(n), last = st.exams[st.exams.length - 1];
-    function stepCls(i) { var s = S5[i]; return s.done ? "done" : s.now ? "now" : s.open ? "open" : "todo"; }
-    function stepHead(i, title, sub) {
-      return '<li class="' + stepCls(i) + '"><span class="node" aria-hidden="true">' + (S5[i].done ? CHECK : "") + '</span><div class="sbody"><h3>' + title + (S5[i].now ? '<span class="here">You are here</span>' : "") + "</h3>" + (sub ? '<p class="ssub">' + sub + "</p>" : "");
+    function stepCls(i) { var s5 = S5[i]; return s5.done ? "done" : s5.now ? "now" : s5.open ? "open" : "todo"; }
+    function stepHead(i, title, sub, mins) {
+      return '<li class="' + stepCls(i) + '"><span class="node" aria-hidden="true">' + (S5[i].done ? CHECK : "") + '</span><div class="sbody"><h3>' + title + (mins ? '<span class="mins">' + mins + "</span>" : "") + (S5[i].now ? '<span class="here">You are here</span>' : "") + "</h3>" + (sub ? '<p class="ssub">' + sub + "</p>" : "");
     }
-    h += '<section class="weekpath"><h2>This week, step by step</h2><ol class="vrail">';
-    // 1 floor
-    h += stepHead(0, "Find your floor", "Five questions before the lesson, so you know what is new. Not graded.") +
+    h += '<section class="weekpath"><h2>This unit, step by step</h2><ol class="vrail">';
+    h += stepHead(0, "Find your floor", "Five questions before the lesson, so you know what is new. Not graded.", "5 min") +
       (st.pretest ? '<p class="sdone">Done. You got ' + st.pretest.score + " of " + st.pretest.n + '.</p><a class="btn sm" href="#/pretest/' + n + '">Do it again</a>' : '<a class="btn pri" href="#/pretest/' + n + '">Start</a>') + "</div></li>";
-    // 2 lesson
-    h += stepHead(1, "Read the lesson", "The full story, with every interactive. Answer every green box, then tick the first task below.") + '<a class="btn' + (S5[1].now ? " pri" : "") + '" href="' + w.lesson + '">Open the ' + esc(lbl(n)) + " lesson</a></div></li>";
-    // 3 practice
-    h += stepHead(2, "Practice, any time", "Unlimited questions from the exam bank, with explanations. Questions you miss come back more often, and calculation questions get new numbers every time.") + '<div class="row"><a class="btn" href="#/practice/' + n + '">Practice</a><span class="meta">' + S5[2].note + "</span></div></div></li>";
-    // 4 tasks
+    h += stepHead(1, "Read the lesson", "The full story in sittings of 30 to 45 minutes, with every interactive. It remembers where you stopped. Answer every green box, then tick the first task below.", "3 to 4 sittings") + '<a class="btn' + (S5[1].now ? " pri" : "") + '" href="' + w.lesson + '">Open the ' + esc(lbl(n)) + " lesson</a></div></li>";
+    h += stepHead(2, "Practice, any time", "Unlimited questions with explanations. Questions you miss come back more often, calculation questions get new numbers every time, and once you have passed a unit about a third of the questions come from earlier units.", "15 min sets") + '<div class="row"><a class="btn" href="#/practice/' + n + '">Practice</a><span class="meta">' + S5[2].note + "</span></div></div></li>";
     var td = w.tasks.filter(function (t) { return st.tasks[t.id]; }).length;
     h += stepHead(3, "Tasks", td + " of " + w.tasks.length + " done.") + '<div class="tasks">';
     w.tasks.forEach(function (t) {
       h += '<label class="task' + (st.tasks[t.id] ? " checked" : "") + '"><input type="checkbox" data-task="' + t.id + '"' + (st.tasks[t.id] ? " checked" : "") + '><span class="box" aria-hidden="true">' + CHECK + '</span><span class="tt">' + esc(t.text) +
         (t.link ? ' <a href="' + t.link + '"' + (/^https?:/.test(t.link) ? ' target="_blank" rel="noopener"' : "") + ">" + esc(t.linkText || "Open") + "</a>" : "") + "</span></label>" +
-        (t.teach ? '<div class="teach"><textarea id="teach" placeholder="Explain it here, in your own words.">' + esc(st.teach) + '</textarea><div class="row"><button class="btn sm" id="copyTeach" type="button">Copy it to paste to Claude</button><span class="meta" id="wc"></span></div></div>' : "");
+        (t.teach ? '<div class="teach"><textarea id="teach" placeholder="Explain it here, in your own words.">' + esc(st.teach) + '</textarea><div class="row"><button class="btn sm" id="copyTeach" type="button">Copy it to paste to Claude</button><span class="meta" id="wc"></span></div><div class="row grade"><label for="tgrade">Claude\'s grade, out of 10</label><input id="tgrade" inputmode="numeric" value="' + esc(st.teachGrade || "") + '"></div></div>' : "");
     });
     h += "</div></div></li>";
-    // 5 exam
-    h += stepHead(4, "The exam", b.examSize + " questions, drawn at random from the bank, one from every topic. 100% to pass. After a miss you clear those questions again with fresh numbers, then retake a brand new draw.");
+    h += stepHead(4, "The exam", "Every topic of this unit, plus up to three questions from units you already passed. 100% to pass. If you miss exactly one, two fresh questions on that idea can redeem it. Otherwise you clear your misses with different questions on the same ideas, and the next attempt opens the next day.", "25 min");
     if (st.passed) h += '<p class="sdone">Passed.</p>';
     else if (st.review && st.review.length) h += '<a class="btn pri" href="#/review/' + n + '">Clear your ' + st.review.length + " miss" + (st.review.length > 1 ? "es" : "") + " first</a>";
+    else if (st.nextTry && Date.now() < st.nextTry) h += '<p class="sdone">Your next attempt opens tomorrow. Practice is open now.</p>';
     else h += '<a class="btn' + (S5[4].now ? " pri" : "") + '" href="#/exam/' + n + '">' + (st.exams.length ? "Retake the exam" : "Take the exam") + "</a>";
     if (st.exams.length) h += '<p class="meta attempts">Attempts so far ' + st.exams.map(function (e) { return '<span class="att' + (e.passed ? " ok" : "") + '">' + e.score + "/" + e.n + "</span>"; }).join("") + (last ? " Last on " + new Date(last.date).toLocaleDateString() + "." : "") + "</p>";
     h += "</div></li></ol></section>";
@@ -361,8 +429,9 @@
     if (ta) {
       var wc = function () { var n2 = (ta.value.trim().match(/\S+/g) || []).length; document.getElementById("wc").textContent = n2 + " words"; };
       ta.addEventListener("input", function () { st.teach = ta.value; save(); wc(); }); wc();
+      document.getElementById("tgrade").addEventListener("input", function (e) { st.teachGrade = e.target.value.trim(); save(); });
       document.getElementById("copyTeach").addEventListener("click", function () {
-        var txt = "Grade my " + lbl(n) + " teach-back for the trading academy. Be strict, tell me what is right, wrong and missing.\n\n" + ta.value;
+        var txt = "This is my " + lbl(n) + " teach-back for my trading academy (" + w.title + "). Play a confused beginner who has never heard any of these words. Ask me follow up questions one at a time, the way a curious friend would, until you find the holes. Then grade me out of 10, and tell me plainly what was right, what was wrong and what was missing.\n\n" + ta.value;
         (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { toast("Copied. Paste it to Claude."); }, function () { ta.select(); toast("Select all and copy it manually."); });
       });
     }
@@ -417,7 +486,7 @@
 
   routes.pretest = function (p) {
     var n = wid(p), b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
-    var items = R.shuffle(b.items).slice(0, 5), i = 0;
+    var items = R.shuffle(openItems(n)).slice(0, 5), i = 0;
     session({ kicker: lbl(n) + ", find your floor", title: "Five questions before the lesson", sub: "Answer from what you know now. Guessing is fine. This is not graded.", total: 5, back: "#/week/" + n,
       topicName: function (inst) { return b.topics[inst.topic]; },
       next: function () { return i < items.length ? instance(items[i++]) : null; },
@@ -425,43 +494,73 @@
       onEnd: function (right, count) {
         W(n).pretest = { score: right, n: count, date: Date.now() }; save();
         app.innerHTML = endCard(lbl(n), "Floor found", right + " of " + count, right >= 4 ? "You already have some of this. Read the lesson anyway, the exam asks for the mechanism, not the vocabulary." : "Good. That is what the lesson is for. Every one of those ideas is built from the ground up.",
-          '<a class="btn pri" href="' + week(n).lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a>');
+          '<a class="btn pri" href="' + week(n).lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Unit page</a>');
       } });
   };
 
+  // Practice draws from this unit, and once any unit is passed about a third of the questions come from passed units.
   routes.practice = function (p) {
     var n = wid(p), b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
-    var lastId = null;
-    session({ kicker: lbl(n) + ", practice", title: "Practice", sub: "As many as you want. Missed questions come back more often. Stop whenever you like.", back: "#/week/" + n,
-      topicName: function (inst) { return b.topics[inst.topic]; },
+    var lastId = null, olds = passedUnits().filter(function (x) { return x !== n; });
+    function weighted(pool, unit) {
+      var weights = pool.map(function (it) { var s = S.qstats[qkey(unit(it), it.id)]; return 1 + (s ? s.miss * 3 : 0) + (s ? 0 : 1); });
+      var tot = weights.reduce(function (a, c) { return a + c; }, 0), r = Math.random() * tot, k = 0;
+      while (r > weights[k]) { r -= weights[k]; k++; }
+      return pool[k];
+    }
+    session({ kicker: lbl(n) + ", practice", title: "Practice", sub: "As many as you want. Missed questions come back more often" + (olds.length ? ", and about a third come from earlier units" : "") + ". Stop whenever you like.", back: "#/week/" + n,
+      topicName: function (inst) { return inst.unit === n ? b.topics[inst.topic] : lbl(inst.unit) + ", " + bank(inst.unit).topics[inst.topic]; },
       next: function () {
-        var pool = b.items.filter(function (it) { return it.id !== lastId; });
-        var weights = pool.map(function (it) { var s = S.qstats[qkey(n, it.id)]; return 1 + (s ? s.miss * 3 : 0) + (s ? 0 : 1); });
-        var tot = weights.reduce(function (a, c) { return a + c; }, 0), r = Math.random() * tot, k = 0;
-        while (r > weights[k]) { r -= weights[k]; k++; }
-        lastId = pool[k].id; return instance(pool[k]);
+        var u = olds.length && Math.random() < 0.3 ? R.pick(olds) : n;
+        var pool = openItems(u).filter(function (it) { return it.id !== lastId; });
+        var it = weighted(pool, function () { return u; });
+        lastId = it.id; var inst = instance(it); inst.unit = u; return inst;
       },
-      onAnswer: function (inst, ok) { stat(qkey(n, inst.id), ok); },
+      onAnswer: function (inst, ok) { stat(qkey(inst.unit, inst.id), ok); },
       onEnd: function () {} });
   };
 
+  // Clearing a miss asks a different question on the same idea, never the one whose answer was just shown.
   routes.review = function (p) {
     var n = wid(p), b = bank(n), st = W(n);
     if (!b || !st.review || !st.review.length) return go("#/week/" + n);
-    var queue = st.review.slice(), cleared = 0, startN = queue.length;
-    session({ kicker: lbl(n) + ", clear your misses", title: "Get each one right", sub: "Each missed question comes back, with fresh numbers where it has numbers. A wrong answer sends it to the back of the line.", back: "#/week/" + n,
-      topicName: function (inst) { return b.topics[inst.topic] + ", " + cleared + " of " + startN + " cleared"; },
-      next: function () { if (!queue.length) return null; var it = itemById(b, queue[0]); return instance(it); },
+    function norm(m) { if (typeof m === "string") { var it = itemById(b, m); return { u: n, topic: it ? it.topic : null, id: m }; } return m; }
+    var queue = st.review.map(norm).filter(function (m) { return m.topic; }), cleared = 0, startN = queue.length;
+    session({ kicker: lbl(n) + ", clear your misses", title: "Get each idea right", sub: "Each missed idea comes back as a different question. A wrong answer sends it to the back of the line.", back: "#/week/" + n,
+      topicName: function (inst) { return bank(inst.unit).topics[inst.topic] + ", " + cleared + " of " + startN + " cleared"; },
+      next: function () {
+        if (!queue.length) return null;
+        var m = queue[0], avoid = {}; avoid[m.id] = 1;
+        var inst = instance(pickFrom(m.u, m.topic, avoid)); inst.unit = m.u; return inst;
+      },
       onAnswer: function (inst, ok) {
-        stat(qkey(n, inst.id), ok);
-        var id = queue.shift();
-        if (ok) cleared++; else queue.push(id);
+        stat(qkey(inst.unit, inst.id), ok);
+        var m = queue.shift();
+        if (ok) cleared++; else queue.push(m);
         st.review = queue.slice();
       },
       onEnd: function () {
         st.review = null; save();
-        app.innerHTML = endCard(lbl(n), "Misses cleared", "", "The retake is unlocked. It will be a completely new draw from the bank.",
-          '<a class="btn pri" href="#/exam/' + n + '">Retake the exam</a><a class="btn" href="#/practice/' + n + '">Practice more first</a>');
+        var later = st.nextTry && Date.now() < st.nextTry;
+        app.innerHTML = endCard(lbl(n), "Misses cleared", "", later ? "The retake opens tomorrow and will be a completely new draw. Practice is open now." : "The retake is unlocked. It will be a completely new draw.",
+          later ? '<a class="btn pri" href="#/practice/' + n + '">Practice</a><a class="btn" href="#/week/' + n + '">Unit page</a>' : '<a class="btn pri" href="#/exam/' + n + '">Retake the exam</a><a class="btn" href="#/practice/' + n + '">Practice more first</a>');
+      } });
+  };
+
+  routes.daily = function () {
+    var due = dueTopics(); if (!due.length) return go("#/");
+    var queue = due.slice(), total = queue.length;
+    session({ kicker: "Today's review", title: "Spaced review", sub: "One question on each idea that is due. Right moves it further into the future, wrong brings it back tomorrow.", total: total, back: "#/",
+      topicName: function (inst) { return lbl(inst.unit) + ", " + bank(inst.unit).topics[inst.topic]; },
+      next: function () {
+        if (!queue.length) return null;
+        var k = queue.shift(), parts = k.split("|"), inst = instance(pickFrom(parts[0], parts[1]));
+        inst.unit = parts[0]; inst.rk = k; return inst;
+      },
+      onAnswer: function (inst, ok) { stat(qkey(inst.unit, inst.id), ok); review(inst.rk, ok); },
+      onEnd: function (right, count) {
+        save();
+        app.innerHTML = endCard("Today's review", "Done for today", right + " of " + count, "The ideas you got right come back in a few days, then a week, then three weeks, then two months. The ones you missed come back tomorrow.", '<a class="btn pri" href="#/">Back to the path</a>');
       } });
   };
 
@@ -492,7 +591,7 @@
   };
 
   // ------------------------------------------------------------------ the exam
-  function compose(b) {
+  function compose(b, n) {
     var by = {}; b.items.forEach(function (it) { (by[it.topic] = by[it.topic] || []).push(it); });
     var picked = [], used = {};
     R.shuffle(Object.keys(by)).forEach(function (t) { if (picked.length < b.examSize) { var it = R.pick(by[t]); picked.push(it); used[it.id] = 1; } });
@@ -500,17 +599,28 @@
     var gens = picked.filter(function (it) { return it.gen; }).length;
     rest.filter(function (it) { return it.gen; }).forEach(function (it) { if (gens < 4 && picked.length < b.examSize) { picked.push(it); used[it.id] = 1; gens++; } });
     rest.forEach(function (it) { if (picked.length < b.examSize && !used[it.id]) { picked.push(it); used[it.id] = 1; } });
-    return R.shuffle(picked).map(instance);
+    var qs = picked.map(function (it) { var q = instance(it); q.unit = n; return q; });
+    // Up to three cumulative questions from passed units, earliest due first.
+    var olds = passedUnits().filter(function (x) { return x !== n; });
+    if (olds.length) {
+      var keys = [];
+      olds.forEach(function (u) { Object.keys(bank(u).topics).forEach(function (t) { keys.push(u + "|" + t); }); });
+      keys.sort(function (a, c) { var x = (S.rq || {})[a], y = (S.rq || {})[c]; return (x ? x.due : 0) - (y ? y.due : 0) || Math.random() - 0.5; });
+      keys.slice(0, 3).forEach(function (k) { var pr = k.split("|"), q = instance(pickFrom(pr[0], pr[1])); q.unit = pr[0]; q.cum = true; qs.push(q); });
+    }
+    return R.shuffle(qs);
   }
+  function qTopic(q) { return (q.cum ? lbl(q.unit) + ", " : "") + bank(q.unit).topics[q.topic]; }
 
   routes.exam = function (p) {
-    var n = wid(p), b = bank(n), st = W(n);
+    var n = wid(p), b = bank(n), st = W(n), dbg = /debug/.test(location.search);
     if (!b || !unlocked(n)) return go("#/week/" + n);
     if (st.review && st.review.length) return go("#/review/" + n);
-    var qs = compose(b), ans = new Array(qs.length);
-    if (/debug/.test(location.search)) window.__exam = qs;
-    var h = '<div class="focus exam"><a class="back" href="#/week/' + n + '">Leave without submitting</a>' + head(lbl(n) + " exam", qs.length + " questions. Every one right.", "No feedback until you submit. Work calculations on paper. Numeric answers accept commas.");
-    h += qs.map(function (q, i) { return qHTML(q, i, { topic: b.topics[q.topic], label: "Question " + (i + 1) + " of " + qs.length }); }).join("");
+    if (!st.passed && st.nextTry && Date.now() < st.nextTry && !dbg) return go("#/week/" + n);
+    var qs = compose(b, n), ans = new Array(qs.length);
+    if (dbg) window.__exam = qs;
+    var h = '<div class="focus exam"><a class="back" href="#/week/' + n + '">Leave without submitting</a>' + head(lbl(n) + " exam", qs.length + " questions. Every one right.", "No feedback until you submit. Work calculations on paper. Numeric answers accept commas and dollar signs.");
+    h += qs.map(function (q, i) { return qHTML(q, i, { topic: qTopic(q), label: "Question " + (i + 1) + " of " + qs.length }); }).join("");
     h += '<div class="submitbar"><div class="sbin"><span class="meter"><i id="ansbar" style="width:0%"></i></span><span class="meta" id="answered">0 of ' + qs.length + ' answered</span><button class="btn pri" id="submit" type="button" disabled>Submit exam</button></div></div></div>';
     app.innerHTML = h;
     function upd() {
@@ -519,46 +629,86 @@
       document.getElementById("ansbar").style.width = (c / qs.length * 100) + "%";
       document.getElementById("submit").disabled = c < qs.length;
     }
-    app.querySelectorAll(".q").forEach(function (qe) {
+    wire(app, ans, upd);
+    document.getElementById("submit").addEventListener("click", function () {
+      var res = qs.map(function (q, i) { var ok = grade(q, ans[i]); stat(qkey(q.unit, q.id), ok); return ok; });
+      var missedQ = qs.filter(function (q, i) { return !res[i]; });
+      if (missedQ.length === 1) return redeem(missedQ[0], res, ans);
+      finish(missedQ, res, ans, null);
+    });
+    function redeem(mq, res, ans0) {
+      var avoid = {}; qs.forEach(function (q) { if (q.unit === mq.unit) avoid[q.id] = 1; });
+      var r1 = pickFrom(mq.unit, mq.topic, avoid); avoid[r1.id] = 1;
+      var r2 = pickFrom(mq.unit, mq.topic, avoid);
+      var rq = [instance(r1), instance(r2)]; rq.forEach(function (q) { q.unit = mq.unit; });
+      if (dbg) window.__exam = rq;
+      var ra = new Array(2), i0 = qs.indexOf(mq);
+      var o = '<div class="focus exam">' + head(lbl(n) + " exam", "One slip. Redeem it.", "You missed only question " + (i0 + 1) + ", on " + esc(qTopic(mq)) + ". Answer these two fresh questions on the same idea. Both right means you pass.");
+      o += rq.map(function (q, i) { return qHTML(q, i, { topic: qTopic(q), label: "Redemption " + (i + 1) + " of 2" }); }).join("");
+      o += '<div class="submitbar"><div class="sbin"><span class="meter"><i id="ansbar" style="width:0%"></i></span><span class="meta" id="answered">0 of 2 answered</span><button class="btn pri" id="submit" type="button" disabled>Submit</button></div></div></div>';
+      app.innerHTML = o; window.scrollTo(0, 0);
+      wire(app, ra, function () {
+        var c = ra.filter(function (a) { return a != null && String(a).trim() !== ""; }).length;
+        document.getElementById("answered").textContent = c + " of 2 answered";
+        document.getElementById("ansbar").style.width = (c / 2 * 100) + "%";
+        document.getElementById("submit").disabled = c < 2;
+      });
+      document.getElementById("submit").addEventListener("click", function () {
+        var ok = rq.map(function (q, i) { var g = grade(q, ra[i]); stat(qkey(q.unit, q.id), g); return g; });
+        var extra = rq.filter(function (q, i) { return !ok[i]; });
+        finish(ok[0] && ok[1] ? [] : [mq].concat(extra), res, ans0, { rq: rq, ra: ra, ok: ok, mq: mq });
+      });
+    }
+    function finish(missedQ, res, ans0, red) {
+      var passed = missedQ.length === 0, score = res.filter(Boolean).length;
+      st.exams.push({ date: Date.now(), score: score, n: qs.length, missed: missedQ.map(function (q) { return q.id; }), passed: passed, redeemed: !!(red && passed) });
+      if (passed) { st.passed = true; st.review = null; st.nextTry = null; schedule(n); }
+      else { st.review = missedQ.map(function (q) { return { u: q.unit, topic: q.topic, id: q.id }; }); st.nextTry = inDays(1); }
+      save();
+      var nx = TA.ORDER[unitNo(n)] || null;
+      var o = '<div class="focus">' + head(lbl(n) + " exam", passed ? (red ? "Passed, slip redeemed" : "Passed") : "Not yet") + '<section class="result ' + (passed ? "pass" : "fail") + '"><p class="score">' + score + "/" + qs.length + "</p>";
+      if (passed) {
+        o += "<p>" + (tasksDone(n) && gatesDone(n) ? (nx ? lbl(nx) + " is unlocked." : "You have finished the path.") : "Finish the remaining tasks on the unit page to " + (nx ? "unlock " + lbl(nx) : "finish the path") + ".") + " The topics of this unit now join your spaced review." + '</p><div class="row"><a class="btn pri" href="#/week/' + n + '">Unit page</a><a class="btn" href="#/">The path</a></div>';
+      } else {
+        o += "<p>" + (red ? "The redemption questions were not both right. " : "You missed " + missedQ.length + ". ") + "Read each explanation below. Then clear those ideas with different questions. The next attempt opens tomorrow, with a completely new draw.</p><div class=\"row\"><a class=\"btn pri\" href=\"#/review/" + n + '">Clear your misses</a></div>';
+      }
+      o += "</section>";
+      var shown = [];
+      qs.forEach(function (q, i) { if (!res[i]) shown.push([q, ans0[i], i + 1]); });
+      if (red) red.rq.forEach(function (q, i) { if (!red.ok[i]) shown.push([q, red.ra[i], "R" + (i + 1)]); });
+      if (shown.length && !passed) {
+        o += '<h2 class="missedh">What you missed</h2>';
+        shown.forEach(function (x) {
+          var q = x[0], a = x[1], yours = q.type === "mcq" ? (a != null ? q.choices[a].t : "") : a;
+          o += '<article class="q missed"><header class="qn"><span class="qnum">Question ' + x[2] + '</span><span class="qtopic">' + esc(qTopic(q)) + '</span></header><div class="qt">' + q.q + '</div><dl class="ans"><dt class="no">Your answer</dt><dd>' + esc(yours) + '</dd><dt class="ok">Correct answer</dt><dd>' + esc(rightText(q)) + '</dd></dl><div class="fb"><p>' + q.ex + "</p></div></article>";
+        });
+      }
+      app.innerHTML = o + "</div>"; window.scrollTo(0, 0);
+    }
+  };
+  function wire(root, ans, upd) {
+    root.querySelectorAll(".q").forEach(function (qe) {
       var i = +qe.getAttribute("data-i");
       qe.querySelectorAll(".opt").forEach(function (b2) {
         b2.addEventListener("click", function () { qe.querySelectorAll(".opt").forEach(function (o) { o.classList.remove("sel"); o.setAttribute("aria-pressed", "false"); }); b2.classList.add("sel"); b2.setAttribute("aria-pressed", "true"); qe.classList.add("answered"); ans[i] = +b2.getAttribute("data-k"); upd(); });
       });
       var inp = qe.querySelector("input"); if (inp) inp.addEventListener("input", function () { ans[i] = inp.value; qe.classList.toggle("answered", !!inp.value.trim()); upd(); });
     });
-    document.getElementById("submit").addEventListener("click", function () {
-      var res = qs.map(function (q, i) { var ok = grade(q, ans[i]); stat(qkey(n, q.id), ok); return ok; });
-      var score = res.filter(Boolean).length, passed = score === qs.length;
-      var missed = []; qs.forEach(function (q, i) { if (!res[i]) missed.push(q.id); });
-      st.exams.push({ date: Date.now(), score: score, n: qs.length, missed: missed, passed: passed });
-      if (passed) { st.passed = true; st.review = null; } else st.review = missed;
-      save();
-      var o = '<div class="focus">' + head(lbl(n) + " exam", passed ? "Passed" : "Not yet") + '<section class="result ' + (passed ? "pass" : "fail") + '"><p class="score">' + score + "/" + qs.length + "</p>";
-      if (passed) {
-        var nx = sib(n, 1), nxl = nx ? lbl(nx.id) : "the end of the track";
-        o += "<p>" + (tasksDone(n) && gatesDone(n) ? (nx ? nxl + " is unlocked." : "You have finished the track.") : "Finish the remaining tasks on the week page to " + (nx ? "unlock " + nxl : "finish the track") + ".") + '</p><div class="row"><a class="btn pri" href="#/week/' + n + '">Week page</a><a class="btn" href="#/">Academy</a></div>';
-      } else {
-        o += "<p>You missed " + missed.length + ". Read each explanation below. Then clear those questions again, with fresh numbers, before a new exam draw unlocks.</p><div class=\"row\"><a class=\"btn pri\" href=\"#/review/" + n + '">Clear your misses</a></div>';
-      }
-      o += "</section>";
-      if (!passed) {
-        o += '<h2 class="missedh">What you missed</h2>';
-        qs.forEach(function (q, i) {
-          if (res[i]) return;
-          var yours = q.type === "mcq" ? (ans[i] != null ? q.choices[ans[i]].t : "") : ans[i];
-          o += '<article class="q missed"><header class="qn"><span class="qnum">Question ' + (i + 1) + '</span><span class="qtopic">' + esc(b.topics[q.topic]) + '</span></header><div class="qt">' + q.q + '</div><dl class="ans"><dt class="no">Your answer</dt><dd>' + esc(yours) + '</dd><dt class="ok">Correct answer</dt><dd>' + esc(rightText(q)) + '</dd></dl><div class="fb"><p>' + q.ex + "</p></div></article>";
-        });
-      }
-      app.innerHTML = o + "</div>"; window.scrollTo(0, 0);
-    });
-  };
+  }
 
   // ------------------------------------------------------------------ journal math
+  var POINT = { MES: 5, MNQ: 2, ES: 50, NQ: 20 };
+  function costR(t, risk) {
+    var pv = POINT[t.inst], set = S.settings;
+    if (!pv || !risk) return 0;
+    var dollars = (+set.costRT || 0) + (+set.slipTicks || 0) * 0.25 * pv;
+    return dollars / (risk * pv);
+  }
   function rOf(t) {
     if (t.rOverride !== "" && t.rOverride != null && !isNaN(parseFloat(t.rOverride))) return parseFloat(t.rOverride);
     var e = +t.entry, s = +t.stop, x = +t.exit, risk = Math.abs(e - s);
     if (!risk || isNaN(risk) || isNaN(x)) return NaN;
-    return t.dir === "long" ? (x - e) / risk : (e - x) / risk;
+    return (t.dir === "long" ? (x - e) / risk : (e - x) / risk) - costR(t, risk);
   }
   function stats(trs) {
     var rs = trs.map(rOf).filter(function (r) { return !isNaN(r); }), n = rs.length;
@@ -580,21 +730,60 @@
   }
   function sorted() { return S.journal.slice().sort(function (a, b) { return (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")) || a.id - b.id; }); }
 
+  // The z value a t statistic must beat when k versions have been tested, two sided at 5% with a Bonferroni split.
+  function tNeed(k) {
+    k = Math.max(1, Math.round(k || 1));
+    var p = 1 - 0.025 / k, a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239],
+      b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155224072],
+      c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783],
+      d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+    var q, r;
+    if (p > 0.97575) { q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+    q = p - 0.5; r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+  function frozenTrades(mode) {
+    var set = S.settings, name = (set.frozenSetup || "").trim().toLowerCase(), since = set.frozenOn || "";
+    if (!name) return [];
+    return sorted().filter(function (t) { return t.mode === mode && (t.setup || "").trim().toLowerCase() === name && (!since || t.date >= since); });
+  }
+  function mcDrawdown95(rs, len) {
+    if (rs.length < 10) return null;
+    var dds = [];
+    for (var k = 0; k < 400; k++) {
+      var cum = 0, peak = 0, dd = 0;
+      for (var i = 0; i < len; i++) { cum += rs[Math.floor(Math.random() * rs.length)]; peak = Math.max(peak, cum); dd = Math.max(dd, peak - cum); }
+      dds.push(dd);
+    }
+    dds.sort(function (x, y) { return x - y; });
+    return dds[Math.floor(dds.length * 0.95)];
+  }
   function gatePanel() {
-    var G = TA.REAL_MONEY_GATE, trs = sorted().filter(function (t) { return t.mode === G.mode; }), s = stats(trs);
-    var weeksDone = trackWeeks("t").filter(function (w) { return completed(w.id); }).length;
+    var G = TA.REAL_MONEY_GATE, set = S.settings, sim = frozenTrades("sim"), s = stats(sim), k = Math.max(1, +set.versionsTested || 1), need = tNeed(k);
+    var tDone = trackWeeks("t").filter(function (w) { return completed(w.id); }).length;
     var rows = [
-      ["All 12 trading weeks complete", weeksDone + " of 12", weeksDone >= G.minWeeks],
-      ["At least " + G.minTrades + " sim trades on your written setup", (s.n || 0) + " of " + G.minTrades, (s.n || 0) >= G.minTrades],
-      ["Edge statistically real, with a t statistic of expectancy of at least " + G.minT.toFixed(1), s.n > 1 ? s.t.toFixed(2) : "not enough trades", s.n > 1 && s.t >= G.minT],
-      ["Rules followed on at least " + pct(G.minAdherence) + " of sim trades", s.n ? pct(s.adh) : "no trades", s.n && s.adh >= G.minAdherence]
+      ["All 12 trading units complete", tDone + " of 12", tDone >= G.minWeeks],
+      ["Risk capital written down in Settings, money you could lose without touching rent, tuition, savings or your Roth", set.riskCapital > 0 ? "$" + Number(set.riskCapital).toLocaleString("en-US") : "not set", set.riskCapital > 0],
+      ["Out of sample backtest of the frozen setup positive after costs", set.oosPositive ? "yes" : "not yet", !!set.oosPositive],
+      ["At least " + G.minTrades + " sim trades on the frozen setup" + (set.frozenSetup ? ", " + set.frozenSetup : "") + ", logged after it was frozen", set.frozenSetup ? (s.n || 0) + " of " + G.minTrades : "no setup frozen", (s.n || 0) >= G.minTrades],
+      ["Edge statistically real after costs. t statistic at least " + need.toFixed(2) + (k > 1 ? ", raised because " + k + " versions were tested" : ""), s.n > 1 ? s.t.toFixed(2) : "not enough trades", s.n > 1 && s.t >= need],
+      ["Rules followed on at least " + pct(G.minAdherence) + " of those trades", s.n ? pct(s.adh) : "no trades", !!(s.n && s.adh >= G.minAdherence)]
     ];
     var met = rows.filter(function (r) { return r[2]; }).length, all = met === rows.length;
-    var h = '<section class="vault' + (all ? " open" : "") + '"><div class="vhead"><span class="vlock">' + LOCK + '</span><div><h2>Real money</h2><p class="vstate">' + (all ? "Unlocked. Start with one micro contract." : "Locked. " + met + " of " + rows.length + " conditions met.") + "</p></div></div>";
-    h += '<p class="vnote">In the largest studies of day traders, under 1% were reliably profitable after costs. This gate is how you find out which side of that line you are on, cheaply.</p><ul class="vrows">';
+    // Kill switch, once live trading on the frozen setup has begun.
+    var live = frozenTrades("live"), ls = stats(live), kill = null;
+    if (ls.n && s.n > 9) {
+      var dd95 = mcDrawdown95(sim.map(rOf).filter(function (r) { return !isNaN(r); }), ls.n);
+      if (dd95 != null && ls.dd > dd95) kill = "Live drawdown of " + ls.dd.toFixed(1) + "R is worse than 95% of what the sim trades would produce over " + ls.n + " trades (" + dd95.toFixed(1) + "R).";
+      else if (ls.n >= 30 && ls.mean < s.lo) kill = "After " + ls.n + " live trades, expectancy of " + f2(ls.mean) + "R is below the sim's lower 95% bound of " + f2(s.lo) + "R.";
+    }
+    var open = all && !kill;
+    var h = '<section class="vault' + (open ? " open" : "") + '"><div class="vhead"><span class="vlock">' + LOCK + '</span><div><h2>Real money</h2><p class="vstate">' + (kill ? "Locked again by the kill switch." : open ? "Unlocked. Start with one micro contract." : "Locked. " + met + " of " + rows.length + " conditions met.") + "</p></div></div>";
+    if (kill) h += '<p class="vnote kill">' + esc(kill) + " Go back to sim and find out why before risking more.</p>";
+    h += '<p class="vnote">In the largest studies of day traders, under 1% were reliably profitable after costs. This gate counts only one frozen setup, takes costs out of every trade, and asks for more evidence the more versions you test. All three outcomes count as a win. An edge survives and you start small. No edge survives and you leave with a funded Roth and a rigorous backtest. Or it is unclear and you keep simming.</p><ul class="vrows">';
     rows.forEach(function (r) { h += '<li class="' + (r[2] ? "ok" : "") + '"><span class="tick">' + (r[2] ? CHECK : "") + '</span><span class="vl">' + esc(r[0]) + '</span><span class="vv">' + esc(r[1]) + "</span></li>"; });
     h += "</ul>";
-    if (s.need) h += '<p class="vnote">At your current sim expectancy of ' + f2(s.mean) + "R per trade, roughly " + s.need + " trades are needed before luck stops being a good explanation.</p>";
+    if (s.need) h += '<p class="vnote">At your current sim expectancy of ' + f2(s.mean) + "R per trade after costs, roughly " + s.need + " trades are needed before luck stops being a good explanation.</p>";
     return h + "</section>";
   }
 
@@ -746,12 +935,25 @@
   // ------------------------------------------------------------------ settings
   routes.settings = function () {
     var set = S.settings;
-    var h = head("Settings", "Sync, rules and backups");
+    var h = head("Settings", "Sync, plan, rules and backups");
     if (Sync.on()) {
       h += '<section class="panel sync"><h2>Cloud sync is on</h2><p class="meta" id="syncstat">' + esc(Sync.footer()) + '</p><p>To use the academy on another device, open it there, go to Settings, and paste this code under Link this device. Keep it private, anyone with it can see and change your progress.</p><p class="code" id="s_code">' + esc(Sync.code()) + '</p><div class="row"><button class="btn" id="s_copy" type="button">Copy the code</button><button class="btn" id="s_now" type="button">Sync now</button><button class="btn ghost" id="s_off" type="button">Turn off on this device</button></div></section>';
     } else {
       h += '<section class="panel sync"><h2>Cloud sync</h2><p class="meta">Right now your progress lives only in this browser. Turn on sync to keep it safe and use it on your laptop and your iPad.</p><div class="row"><button class="btn pri" id="s_on" type="button">Turn on cloud sync</button></div><h3>Link this device</h3><p class="meta">Already turned it on somewhere else? Paste that sync code here. Progress from both places is combined.</p><div class="row"><input id="s_link" class="codein" placeholder="ta-xxxxx-xxxxx-xxxxx-xxxxx" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="s_linkbtn" type="button">Link</button></div></section>';
     }
+    h += '<section class="panel"><h2>Your plan</h2><p class="meta">The path uses these to project dates, and the real money gate needs the second one written down before it can open.</p><div class="grid">' +
+      fld("Hours per week for this", '<input id="s_hours" inputmode="decimal" value="' + esc(set.hours || "") + '">') +
+      fld("Money you could lose, in dollars", '<input id="s_cap" inputmode="numeric" value="' + esc(set.riskCapital || "") + '" placeholder="without touching rent, tuition, savings or your Roth">') +
+      '</div><div class="row"><button class="btn pri" id="s_plan" type="button">Save plan</button></div></section>';
+    h += '<section class="panel"><h2>The frozen setup</h2><p class="meta">Freeze your written strategy in Unit 11. From then on, only sim and live trades with exactly this setup name, logged on or after this date, count toward the real money gate. Every new version you test raises the bar.</p><div class="grid">' +
+      fld("Setup name, exactly as logged", '<input id="s_fs" value="' + esc(set.frozenSetup || "") + '">') +
+      fld("Frozen on", '<input id="s_fo" type="date" value="' + esc(set.frozenOn || "") + '">') +
+      fld("Versions tested so far", '<input id="s_vt" inputmode="numeric" value="' + esc(set.versionsTested || 1) + '">') +
+      '</div><label class="check"><input type="checkbox" id="s_oos"' + (set.oosPositive ? " checked" : "") + '> My out of sample backtest of this setup is positive after costs</label><div class="row"><button class="btn pri" id="s_fz" type="button">Save setup</button></div></section>';
+    h += '<section class="panel"><h2>Trading costs</h2><p class="meta">Taken out of every trade logged with entry, stop and exit, so every R in the journal is after costs. MES is $5 a point, MNQ $2, ES $50, NQ $20, and a tick is 0.25 points on all four.</p><div class="grid">' +
+      fld("Fees per contract, round trip, in dollars", '<input id="s_cost" inputmode="decimal" value="' + esc(set.costRT != null ? set.costRT : 1.5) + '">') +
+      fld("Slippage per round trip, in ticks", '<input id="s_slip" inputmode="decimal" value="' + esc(set.slipTicks != null ? set.slipTicks : 1) + '">') +
+      '</div><div class="row"><button class="btn pri" id="s_costs" type="button">Save costs</button></div></section>';
     h += '<section class="panel"><h2>Daily trading limits</h2><p class="meta">Set these before you trade, never during. The journal tells you to stop when you hit either one.</p><div class="grid">' +
       fld("Daily loss limit, in R", '<input id="s_loss" inputmode="decimal" value="' + set.dailyLossR + '">') + fld("Max trades per day", '<input id="s_max" inputmode="numeric" value="' + set.maxTrades + '">') +
       '</div><div class="row"><button class="btn pri" id="s_save" type="button">Save limits</button></div></section>';
@@ -759,6 +961,9 @@
     h += '<section class="panel danger"><h2>Start over</h2><p class="meta">Erases all progress, exams and journal trades in this browser and turns sync off here. The cloud copy is kept. Export first.</p><button class="btn danger" id="s_reset" type="button">Erase everything</button></section>';
     app.innerHTML = h;
     function el(id) { return document.getElementById(id); }
+    el("s_plan").addEventListener("click", function () { var hrs = parseFloat(el("s_hours").value), cap = parseFloat(String(el("s_cap").value).replace(/[,$\s]/g, "")); set.hours = hrs > 0 ? hrs : null; set.riskCapital = cap >= 0 ? cap : null; save(); toast("Plan saved."); });
+    el("s_fz").addEventListener("click", function () { set.frozenSetup = el("s_fs").value.trim(); set.frozenOn = el("s_fo").value; set.versionsTested = Math.max(1, parseInt(el("s_vt").value, 10) || 1); set.oosPositive = el("s_oos").checked; save(); toast("Setup saved."); });
+    el("s_costs").addEventListener("click", function () { var c = parseFloat(el("s_cost").value), sl = parseFloat(el("s_slip").value); if (!(c >= 0) || !(sl >= 0)) { toast("Costs cannot be negative."); return; } set.costRT = c; set.slipTicks = sl; save(); toast("Costs saved. Every R is now after costs."); });
     if (el("s_on")) el("s_on").addEventListener("click", function () { el("s_on").disabled = true; Sync.enable().then(function () { toast("Cloud sync is on."); routes.settings(); }); });
     if (el("s_linkbtn")) el("s_linkbtn").addEventListener("click", function () {
       el("s_linkbtn").disabled = true;

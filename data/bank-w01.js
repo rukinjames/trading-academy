@@ -229,7 +229,7 @@ TA.BANKS = TA.BANKS || {};
       ex: "Traders who bought near the same price reason the same way and park their protection just under the same visible level. The result is a hidden cluster of future market sells at one price. One trade there can release them all." },
     { id: "t8", topic: "stops", q: "A fund needs to buy 500 ES contracts without pushing the price up. Why might it welcome the price reaching a cluster of stop sells below?",
       opts: ["The triggered stops become a burst of market sells that it can buy from", "The stops get cancelled, removing sellers from the book", "Stop orders give buyers a discount from the exchange", "The stops turn into bids that push the price back up"],
-      ex: "Someone who needs to buy a lot needs a lot of selling. Triggered stops supply it all at once, and those market sells must take whatever bids exist, including the fund's. Clusters of stops are clusters of future market orders, and Week 5 comes back to this." },
+      ex: "Someone who needs to buy a lot needs a lot of selling. Triggered stops supply it all at once, and those market sells must take whatever bids exist, including the fund's. Clusters of stops are clusters of future market orders, and Unit 8, on liquidity, comes back to this." },
 
     // ================= sides
     { id: "a1", topic: "sides", q: "The tape shows a large trade at the bid. Who was the aggressor?",

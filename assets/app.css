@@ -389,3 +389,25 @@ textarea{width:100%;min-height:13rem;border:1px solid var(--rule);border-radius:
 .panel.sync .code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:1.02rem;padding:.65rem .85rem;background:var(--sunk);border:1px solid var(--rule);border-radius:var(--r-ctl);word-break:break-all;user-select:all;margin:.2rem 0 1rem}
 .codein{flex:1 1 15rem;min-height:44px;border:1px solid var(--rule);border-radius:var(--r-ctl);padding:.45rem .7rem;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;background:var(--sunk);color:var(--ink)}
 .loading{color:var(--sub);padding:4rem 0;text-align:center;font-family:var(--serif);font-size:1.1rem}
+
+/* ---------- one path, two lanes, review queue, plan */
+[hidden]{display:none !important}
+.lanetag{display:inline-block;font-size:.72rem;font-weight:750;padding:.05rem .45rem;border-radius:999px;margin-right:.3rem;vertical-align:1px}
+.lanetag.lane-t{background:color-mix(in srgb,var(--bid) 16%,transparent);color:var(--bid)}
+.lanetag.lane-i{background:var(--teal-soft);color:var(--teal)}
+.today{display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--surface);border:2px solid var(--teal);border-radius:var(--r-panel);padding:1rem 1.2rem;margin:0 0 1rem}
+.today h2{font-size:1.2rem;margin:0 0 .15rem}
+.today p{color:var(--sub);margin:0}
+.waiting{font-size:.92rem;color:var(--sub);border-left:3px solid var(--rule);padding:.2rem 0 .2rem .8rem;margin:0 0 1rem}
+.plan{font-size:.95rem;color:var(--sub);margin:0 0 1.4rem;max-width:40rem}
+.roth{border:1px solid var(--gold);background:var(--gold-soft);border-radius:var(--r-panel);padding:1rem 1.15rem;margin:0 0 1.2rem}
+.roth h2{font-size:1.08rem;margin:0 0 .3rem;color:var(--ink)}
+.roth p{margin:0 0 .8rem;color:var(--ink);font-size:.93rem;max-width:38rem}
+.mins{font-family:var(--sans);font-size:.74rem;font-weight:700;color:var(--sub);border:1px solid var(--rule);border-radius:999px;padding:.05rem .5rem;margin-left:.55rem;vertical-align:2px;white-space:nowrap}
+.teach .grade{margin-top:.6rem;align-items:center}
+.teach .grade label{font-size:.85rem;font-weight:650;color:var(--sub)}
+.teach .grade input{width:4.5rem;min-height:40px;border:1px solid var(--rule);border-radius:var(--r-ctl);padding:.3rem .5rem;background:var(--sunk);color:var(--ink)}
+.panel label.check{display:flex;gap:.6rem;align-items:center;margin:0 0 1rem;font-size:.95rem}
+.panel label.check input{width:20px;height:20px;accent-color:var(--teal)}
+.vnote.kill{color:var(--ask);font-weight:650}
+.next.lane-i .nextbody{border-left-color:var(--teal)}

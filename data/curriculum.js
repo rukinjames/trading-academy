@@ -32,14 +32,14 @@ TA.WEEKS = [
       "Build candles from trades, combine timeframes, and say what a candle hides"
     ],
     tasks: [
-      { id: "read", text: "Read the whole Week 1 lesson and answer every green box in it.", link: "lessons/week01.html", linkText: "Open the lesson" },
+      { id: "read", text: "Read the whole Unit 1 lesson and answer every green box in it.", link: "lessons/week01.html", linkText: "Open the lesson" },
       { id: "teach", text: "Teach it back. In the box below, explain how a forty dollar share traded for one cent to someone who has never heard of a bid, an ask, a spread, a limit order or a stop. Define each word as you use it. Then paste it to Claude to be graded.", teach: true },
       { id: "tv", text: "Open a free TradingView account and load MES1! (Micro E-mini S&P 500) on the 1 minute chart. Pick one candle and write down its open, high, low and close from the data window. Check that the candle's shape matches those four numbers." , link: "https://www.tradingview.com/chart/?symbol=CME_MINI%3AMES1%21", linkText: "Open MES1! on TradingView" },
       { id: "open", text: "Watch the first 15 minutes after the 9∶30 am New York open (8∶30 am in St. Louis) on a 1 minute MES chart, live or with replay if your plan allows it. Write down three things you notice about candle size and volume compared with the middle of the day." },
       { id: "report", text: "Read pages 1 to 8 of the official SEC and CFTC report on May 6, 2010. You will now understand almost every sentence.", link: "https://www.sec.gov/files/marketevents-report.pdf", linkText: "Open the report (PDF)" }
     ] },
   { id: "t2", track: "t", n: 2, phase: 1, title: "The contract", topic: "Futures, ES and NQ, and what a point costs you",
-    objectives: ["Why futures were invented and what you actually own", "ES, NQ, MES and MNQ specifications, ticks and the dollar value of a point", "Margin, leverage and daily mark to market", "Expiration, rollover and trading hours", "Sessions and scheduled news (CPI, jobs report, FOMC)", "Real costs per round trip. Commissions, exchange fees, spread, slippage"] },
+    objectives: ["Pick a sim platform and a data source, and download a year of 1 minute ES and NQ bars", "Why futures were invented and what you actually own", "ES, NQ, MES and MNQ specifications, ticks and the dollar value of a point", "Margin, leverage and daily mark to market", "Expiration, rollover and trading hours", "Sessions and scheduled news (CPI, jobs report, FOMC)", "Real costs per round trip. Commissions, exchange fees, spread, slippage"] },
   { id: "t3", track: "t", n: 3, phase: 1, title: "The math of staying alive", topic: "Expected value, sizing and ruin",
     objectives: ["Expected value and R multiples", "Expectancy from win rate and payoff", "Position sizing that survives losing streaks", "Drawdown asymmetry and risk of ruin", "The Kelly criterion and why professionals bet a fraction of it", "How many trades it takes to tell skill from luck"] },
   { id: "t4", track: "t", n: 4, phase: 2, title: "Structure", topic: "Swings, trends, break of structure",
@@ -50,8 +50,8 @@ TA.WEEKS = [
     objectives: ["Fair value gaps defined exactly", "Order blocks and supply and demand zones", "Premium and discount within a range", "For each idea, the result that would prove it false"] },
   { id: "t7", track: "t", n: 7, phase: 2, title: "Time and the full model", topic: "Sessions, the New York open, and your first written strategy",
     objectives: ["Sessions and the hours that matter", "The full TJR style setup as a checklist", "Your first strategy spec, precise enough to code", "Pre committed risk rules"] },
-  { id: "t8", track: "t", n: 8, phase: 3, title: "Data and code", topic: "Getting data and coding the setups",
-    objectives: ["Getting intraday futures data", "Python and pandas for bars", "Coding swing points, sweeps and gaps", "Cost and slippage models", "Look ahead bias and how it fakes results"] },
+  { id: "t8", track: "t", n: 8, phase: 3, title: "The backtest harness", topic: "Costs, slippage, look ahead bias, and assembling the detectors",
+    objectives: ["Building a harness around the data you downloaded in Unit 3", "Python and pandas for bars", "Coding swing points, sweeps and gaps", "Cost and slippage models", "Look ahead bias and how it fakes results"] },
   { id: "t9", track: "t", n: 9, phase: 3, title: "Testing honestly", topic: "Separating an edge from luck",
     objectives: ["In sample versus out of sample", "Walk forward testing", "Multiple testing and why the best of 500 backtests lies", "The t statistic of expectancy", "Monte Carlo on trade sequences"] },
   { id: "t10", track: "t", n: 10, phase: 3, title: "Replay", topic: "Execution practice on past data",
@@ -61,32 +61,41 @@ TA.WEEKS = [
     objectives: ["Trading a simulated account in real time", "Tilt, revenge trading and FOMO, and the rules that stop them", "Hard daily limits that you cannot override"],
     gates: [{ mode: "sim", min: 50, label: "50 sim trades logged" }, { mode: "sim", adherence: 0.95, label: "Rules followed on at least 95% of sim trades" }] },
   { id: "t12", track: "t", n: 12, phase: 4, title: "The verdict", topic: "Go, no go, or back to the lab",
-    objectives: ["Analyze every trade. Expectancy, confidence interval, drawdown", "Compare live results with the backtest", "How prop firm evaluations really work, and their expected value", "A written decision you commit to"] },
+    objectives: ["Futures taxes (Form 6781), record keeping, and any employer trading rules", "Analyze every trade. Expectancy, confidence interval, drawdown", "Compare live results with the backtest", "How prop firm evaluations really work, and their expected value", "A written decision you commit to"] },
   { id: "i1", track: "i", n: 1, phase: 1, title: "Eight million dollars of patience", topic: "What you own when you own a stock",
     lesson: "lessons/inv01.html",
     tasks: [
-      { id: "read", text: "Read the whole Investing Week 1 lesson and answer every green box in it.", link: "lessons/inv01.html", linkText: "Open the lesson" },
+      { id: "read", text: "Read the whole Unit 2 lesson and answer every green box in it.", link: "lessons/inv01.html", linkText: "Open the lesson" },
       { id: "teach", text: "Teach it back. In the box below, explain how a gas station attendant and janitor ended up with nearly $8 million, and why that is a positive sum game when day trading is not. Explain it to someone who has never heard the words share, earnings per share, dividend, buyback, P/E or compounding, and define each one as you use it. Then paste it to Claude to be graded.", teach: true },
       { id: "ir", text: "Pick one company Ronald Read owned, Procter and Gamble, J. M. Smucker, Johnson and Johnson or CVS Health. On its investor relations page or in its latest annual report (the 10-K), find its shares outstanding, its earnings per share for the last full year, and its quarterly dividend per share. Then compute its market cap, its P/E and its dividend yield from today's share price, and write the numbers down." },
       { id: "calc", text: "In the lesson's compounding calculator, start with $1,000 at 6.8% after inflation and no yearly additions. Compare the 30 and 40 year results with dividends reinvested and with dividends spent. Write down all four numbers and, in one sentence, why the reinvested ones pull so far ahead." },
       { id: "pg", text: "Read Procter and Gamble's April 2026 dividend announcement, the primary source for the lesson's dividend facts.", link: "https://www.sec.gov/Archives/edgar/data/80424/000008042426000048/pgdividendreleaseapril2026.htm", linkText: "Open the announcement" }
     ],
     objectives: ["Say exactly what a share is and what it entitles you to", "Compute market capitalization, earnings per share and dividend yield", "Explain where shareholder returns come from. Earnings, dividends, buybacks and reinvestment", "Explain why prices bounce daily but follow earnings over decades", "Compute compounding with and without reinvested dividends, and use the rule of 72", "Explain diversification and what an index is", "Explain why investing is positive sum while day trading is zero sum"] },
-  { id: "i2", track: "i", n: 2, phase: 1, title: "The index", topic: "Owning everything, cheaply",
-    objectives: ["What an index fund and an ETF are, and how they work inside", "Why fees compound against you", "Why most professional stock pickers trail the index over long periods", "Total market, S&P 500 and international funds compared"] },
-  { id: "i3", track: "i", n: 3, phase: 1, title: "Risk, honestly", topic: "What the ride actually feels like",
-    objectives: ["Volatility, drawdowns and how long recoveries took in 1929, 2000, 2008 and 2020", "Correlation and why diversification works", "Bonds and cash as shock absorbers", "Sequence of returns risk"] },
-  { id: "i4", track: "i", n: 4, phase: 2, title: "What a company is worth", topic: "Earnings, multiples and discounted cash flow",
-    objectives: ["Read an income statement, balance sheet and cash flow statement", "Price to earnings and earnings yield", "Discounted cash flow from first principles", "Reading a 10-K for what matters"] },
-  { id: "i5", track: "i", n: 5, phase: 2, title: "Building a portfolio", topic: "Allocation, rebalancing and steady buying",
+  { id: "i2", track: "i", n: 2, phase: 1, title: "The index, and your first account", topic: "Owning everything cheaply, and where to hold it",
+    objectives: ["What an index fund and an ETF are, and how they work inside", "Why fees compound against you", "Why most professional stock pickers trail the index over long periods", "Brokerage accounts, IRAs, Roth IRAs and 401(k)s, and who can contribute to a Roth", "Order of operations for your own money, and why it decides how much you can honestly risk trading"] },
+  { id: "i3", track: "i", n: 3, phase: 1, title: "Risk, and what it does to you", topic: "Drawdowns, recoveries and your own behavior",
+    objectives: ["Volatility, drawdowns and how long recoveries took in 1929, 2000, 2008 and 2020", "Correlation, diversification, bonds and cash", "Sequence of returns risk", "Why investors earn less than the funds they own", "Panic selling, performance chasing, and rules that protect you from yourself"] },
+  { id: "i4", track: "i", n: 4, phase: 2, title: "Building a portfolio", topic: "Allocation, rebalancing and steady buying",
     objectives: ["Asset allocation and why it matters most", "Rebalancing", "Dollar cost averaging versus lump sum", "Target date funds and simple three fund portfolios"] },
-  { id: "i6", track: "i", n: 6, phase: 3, title: "Accounts and taxes", topic: "Where you hold it matters",
-    objectives: ["Brokerage accounts, IRAs, Roth IRAs and 401(k)s", "Who can contribute to a Roth IRA and why it matters when you are young", "Short versus long term capital gains, dividends and the wash sale rule", "Order of operations for saving"] },
-  { id: "i7", track: "i", n: 7, phase: 3, title: "The investor's worst enemy", topic: "Behavior, the gap between fund returns and investor returns",
-    objectives: ["Why investors earn less than the funds they own", "Panic selling, performance chasing and overconfidence", "Rules that protect you from yourself"] },
-  { id: "i8", track: "i", n: 8, phase: 3, title: "Picking stocks, if you must", topic: "What it honestly takes",
-    objectives: ["The evidence on individual stock picking", "A written process and a scorecard", "Position sizing for single stocks", "When to sell"] }
+  { id: "i5", track: "i", n: 5, phase: 3, title: "Taxes, and where to hold what", topic: "Gains, dividends and asset location",
+    objectives: ["Short versus long term capital gains, and qualified dividends", "The wash sale rule", "Asset location across taxable and retirement accounts", "How futures are taxed differently, the 60/40 rule for Section 1256 contracts"] },
+  { id: "i6", track: "i", n: 6, phase: 2, title: "What a company is worth", topic: "Earnings, multiples and discounted cash flow",
+    objectives: ["Read an income statement, balance sheet and cash flow statement", "Price to earnings and earnings yield", "Discounted cash flow from first principles", "Reading a 10-K for what matters"] },
+  { id: "i7", track: "i", n: 7, phase: 3, title: "Picking stocks, if you must", topic: "What it honestly takes",
+    objectives: ["The evidence on individual stock picking, including how few stocks produce most of the market's gains", "A written process and a scorecard", "Position sizing for single stocks", "When to sell"] }
 ];
+
+/* One ordered path. Units are numbered by their place here. A trading unit that is done except for its
+   journal trade count lets the next investing unit open while the trades pile up. */
+TA.ORDER = ["t1", "i1", "t2", "i2", "t3", "t4", "i3", "t5", "t6", "i4", "t7", "t8", "t9", "i5", "t10", "i6", "t11", "i7", "t12"];
+TA.BLOCKS = [
+  { from: 1, to: 5, name: "Shared foundations", blurb: "How a market works, what you own, the contract you will trade, your first account, and the math both lanes rest on." },
+  { from: 6, to: 11, name: "The toolkit, with investing between", blurb: "The TJR concepts as testable rules, each coded as you learn it, with risk and portfolio building in between. Your strategy is frozen as version 1 at the end." },
+  { from: 12, to: 14, name: "The lab", blurb: "Backtest the frozen strategy honestly, after costs, on data it was never tuned on." },
+  { from: 15, to: 19, name: "Forward test, with investing filling the waiting", blurb: "Replay and live sim trades pile up while the investing lane finishes. Then the verdict." }
+];
+TA.UNIT_HOURS = 6;
 
 /* The gate between practice and real money. Checked live against the journal. */
 TA.REAL_MONEY_GATE = {
