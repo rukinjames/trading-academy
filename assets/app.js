@@ -9,21 +9,42 @@
     return { v: 1, created: Date.now(), diag: null, weeks: {}, journal: [], qstats: {},
       settings: { dailyLossR: 3, maxTrades: 4 } };
   }
+  // Older saves keyed weeks 1, 2, 3 and question stats by bare id. Both now belong to the trading track.
+  function migrate(s) {
+    if (!s || s.v !== 1) return s;
+    if (!s.mig) {
+      var w2 = {}; Object.keys(s.weeks || {}).forEach(function (k) { w2[/^\d+$/.test(k) ? "t" + k : k] = s.weeks[k]; }); s.weeks = w2;
+      var q2 = {}; Object.keys(s.qstats || {}).forEach(function (k) { q2[k.indexOf(":") < 0 ? "t1:" + k : k] = s.qstats[k]; }); s.qstats = q2;
+      s.mig = 2;
+    }
+    s.deleted = s.deleted || [];
+    s.updated = s.updated || s.created || Date.now();
+    return s;
+  }
   function load() {
-    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return s; } catch (e) {}
-    return fresh();
+    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return migrate(s); } catch (e) {}
+    return migrate(fresh());
   }
   var S = load();
-  function save() {
+  function save(quiet) {
+    S.updated = Date.now();
     try { localStorage.setItem(KEY, JSON.stringify(S)); }
     catch (e) { toast("Could not save in this browser. Export a backup from Settings."); }
+    if (!quiet) Sync.schedule();
   }
-  function W(n) {
-    if (!S.weeks[n]) S.weeks[n] = { tasks: {}, teach: "", exams: [], review: null, passed: false, pretest: null };
-    return S.weeks[n];
+  function W(id) {
+    if (!S.weeks[id]) S.weeks[id] = { tasks: {}, teach: "", exams: [], review: null, passed: false, pretest: null };
+    return S.weeks[id];
   }
-  function week(n) { return TA.WEEKS.filter(function (w) { return w.n === n; })[0]; }
-  function bank(n) { return TA.BANKS && TA.BANKS[n]; }
+  function week(id) { return TA.WEEKS.filter(function (w) { return w.id === id; })[0]; }
+  function bank(id) { return TA.BANKS && TA.BANKS[id]; }
+  function track(t) { return TA.TRACKS.filter(function (x) { return x.id === t; })[0]; }
+  function trackWeeks(t) { return TA.WEEKS.filter(function (w) { return w.track === t; }); }
+  function lbl(id) { var w = week(id); return track(w.track).short + " Week " + w.n; }
+  function phaseOf(w) { return track(w.track).phases[w.phase - 1]; }
+  function wid(p) { var k = (p && p[0]) || "t1"; return /^\d+$/.test(k) ? "t" + k : k; }
+  function sib(id, d) { var w = week(id); return w ? week(w.track + (w.n + d)) : null; }
+  function qkey(id, itemId) { return id + ":" + itemId; }
 
   // ------------------------------------------------------------------ helpers
   var R = {
@@ -43,9 +64,104 @@
   var CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var LOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.2" y="7" width="9.6" height="7" rx="1.6" fill="currentColor"/><path d="M5.3 7V5.2a2.7 2.7 0 0 1 5.4 0V7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 
+
+  // ------------------------------------------------------------------ cloud sync
+  // Progress is stored under a long random sync code. The database only ever sees a hash of the code,
+  // and the two functions below are the only way in. Anyone with the code can read and write that progress.
+  var SYNC_URL = "https://jnfksxaswtxpgsgfmpdm.supabase.co/rest/v1/rpc/";
+  var SYNC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuZmtzeGFzd3R4cGdzZ2ZtcGRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTYzNDYsImV4cCI6MjA5NDA5MjM0Nn0.LS_VoUvoBN4PwsVdxubaYEXqxY8u3eGT1DXRZ94iKa4";
+  function merge(a, b) {
+    if (!b) return a; if (!a) return b;
+    var newer = (b.updated || 0) > (a.updated || 0) ? b : a, older = newer === a ? b : a;
+    var o = JSON.parse(JSON.stringify(newer));
+    var keys = {}; Object.keys(a.weeks || {}).concat(Object.keys(b.weeks || {})).forEach(function (k) { keys[k] = 1; });
+    o.weeks = {};
+    Object.keys(keys).forEach(function (k) {
+      var x = (newer.weeks || {})[k], y = (older.weeks || {})[k];
+      if (!x || !y) { o.weeks[k] = JSON.parse(JSON.stringify(x || y)); return; }
+      var w = JSON.parse(JSON.stringify(x));
+      w.tasks = w.tasks || {};
+      Object.keys(y.tasks || {}).forEach(function (t) { if (y.tasks[t]) w.tasks[t] = true; });
+      var seen = {};
+      w.exams = (x.exams || []).concat(y.exams || []).filter(function (e) { if (seen[e.date]) return false; seen[e.date] = 1; return true; }).sort(function (p, q) { return p.date - q.date; });
+      w.passed = !!(x.passed || y.passed);
+      if (w.passed) w.review = null;
+      if (!x.pretest || (y.pretest && y.pretest.date > x.pretest.date)) w.pretest = y.pretest || x.pretest;
+      if (!w.teach && y.teach) w.teach = y.teach;
+      o.weeks[k] = w;
+    });
+    var del = {}; (a.deleted || []).concat(b.deleted || []).forEach(function (id) { del[id] = 1; });
+    o.deleted = Object.keys(del).map(Number);
+    var j = {}; (newer.journal || []).concat(older.journal || []).forEach(function (t) { if (!del[t.id] && !j[t.id]) j[t.id] = t; });
+    o.journal = Object.keys(j).map(function (k) { return j[k]; });
+    o.qstats = {};
+    [a.qstats || {}, b.qstats || {}].forEach(function (q) { Object.keys(q).forEach(function (k) { var c = o.qstats[k] || { seen: 0, miss: 0 }; c.seen = Math.max(c.seen, q[k].seen || 0); c.miss = Math.max(c.miss, q[k].miss || 0); o.qstats[k] = c; }); });
+    o.diag = (a.diag && b.diag) ? (a.diag.date >= b.diag.date ? a.diag : b.diag) : (a.diag || b.diag || null);
+    o.created = Math.min(a.created || Date.now(), b.created || Date.now());
+    o.updated = Math.max(a.updated || 0, b.updated || 0);
+    return o;
+  }
+  var Sync = (function () {
+    var SK = "ta.sync", timer = null, busy = false, again = false, info = {};
+    try { info = JSON.parse(localStorage.getItem(SK)) || {}; } catch (e) { info = {}; }
+    function keep() { try { localStorage.setItem(SK, JSON.stringify(info)); } catch (e) {} }
+    function rpc(fn, body) {
+      return fetch(SYNC_URL + fn, { method: "POST", headers: { apikey: SYNC_KEY, Authorization: "Bearer " + SYNC_KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) })
+        .then(function (r) { if (!r.ok) throw new Error("the sync server answered " + r.status); return r.json(); });
+    }
+    function newCode() {
+      var al = "abcdefghjkmnpqrstuvwxyz23456789", a = new Uint8Array(20), out = "";
+      crypto.getRandomValues(a);
+      for (var i = 0; i < a.length; i++) { out += al[a[i] % al.length]; if (i % 5 === 4 && i < 19) out += "-"; }
+      return "ta-" + out;
+    }
+    function footer() {
+      if (!info.code) return "Saved in this browser only. Turn on cloud sync in Settings to keep your progress across devices.";
+      if (info.err) return "Cloud sync could not reach the server, so changes are saved in this browser and will sync when it can.";
+      return "Synced to the cloud" + (info.last ? ", last at " + new Date(info.last).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(":", "\u2236") : "") + ".";
+    }
+    function upd() { var f = document.getElementById("syncfoot"); if (f) f.textContent = footer(); var g = document.getElementById("syncstat"); if (g) g.textContent = footer(); }
+    function push() {
+      if (!info.code) return Promise.resolve();
+      if (busy) { again = true; return Promise.resolve(); }
+      busy = true;
+      return rpc("academy_put", { code: info.code, payload: S }).then(function () { info.last = Date.now(); info.err = null; }, function (e) { info.err = String(e.message || e); })
+        .then(function () { keep(); upd(); busy = false; if (again) { again = false; return push(); } });
+    }
+    function now() {
+      if (!info.code) return Promise.resolve(false);
+      return rpc("academy_get", { code: info.code }).then(function (remote) {
+        var before = JSON.stringify(S);
+        if (remote && remote.v === 1) S = merge(S, migrate(remote));
+        var changed = JSON.stringify(S) !== before;
+        save(true);
+        return push().then(function () { return changed; });
+      }, function (e) { info.err = String(e.message || e); keep(); upd(); return false; });
+    }
+    return {
+      on: function () { return !!info.code; },
+      code: function () { return info.code || ""; },
+      footer: footer,
+      schedule: function () { if (!info.code) return; clearTimeout(timer); timer = setTimeout(push, 1200); },
+      now: now,
+      enable: function () { info = { code: newCode() }; keep(); return push(); },
+      link: function (code) {
+        code = String(code || "").trim().toLowerCase();
+        if (!/^ta(-[a-z0-9]{5}){4}$/.test(code)) return Promise.reject(new Error("That does not look like a sync code. It starts with ta- and has four groups of five characters."));
+        return rpc("academy_get", { code: code }).then(function (remote) {
+          if (!remote) throw new Error("No progress is stored under that code. Check it and try again.");
+          info = { code: code }; keep();
+          S = merge(S, migrate(remote)); save(true);
+          return push();
+        });
+      },
+      off: function () { info = {}; keep(); }
+    };
+  })();
+
   // ------------------------------------------------------------------ progress logic
   function tasksDone(n) {
-    var w = week(n); if (!w.tasks) return false;
+    var w = week(n); if (!w || !w.tasks) return false;
     var st = W(n);
     return w.tasks.every(function (t) { return st.tasks[t.id]; });
   }
@@ -61,13 +177,13 @@
   }
   function gatesDone(n) { var w = week(n); return !w.gates || w.gates.every(function (g) { return gateStatus(g).ok; }); }
   function completed(n) { var w = week(n); return !!(w && w.lesson && bank(n) && W(n).passed && tasksDone(n) && gatesDone(n)); }
-  function unlocked(n) { return n === 1 || completed(n - 1); }
-  function currentWeek() { for (var n = 1; n <= 12; n++) if (!completed(n)) return n; return 12; }
+  function unlocked(n) { var w = week(n); return !!w && (w.n === 1 || completed(sib(n, -1).id)); }
+  function currentWeek(t) { var ws = trackWeeks(t); for (var i = 0; i < ws.length; i++) if (!completed(ws[i].id)) return ws[i].id; return ws[ws.length - 1].id; }
 
   // The five steps of a week, for display. Practice is open at any time and never blocks.
   function steps(n) {
     var w = week(n), st = W(n), b = bank(n);
-    var seen = b ? b.items.filter(function (it) { return S.qstats[it.id]; }).length : 0;
+    var seen = b ? b.items.filter(function (it) { return S.qstats[qkey(n, it.id)]; }).length : 0;
     var s = [
       { k: "floor", label: "Find your floor", done: !!st.pretest, href: "#/pretest/" + n },
       { k: "lesson", label: "Lesson", done: !!st.tasks.read, href: w.lesson || ("#/week/" + n) },
@@ -143,30 +259,35 @@
 
   // ------------------------------------------------------------------ home
   routes.home = function () {
-    var cur = currentWeek(), w = week(cur);
-    var h = head("Week " + cur + " of 12, " + esc(TA.PHASES[w.phase - 1].name), esc(w.title), esc(w.topic) + ".");
-    h += '<section class="next" aria-label="Your next step">' + (w.lesson && bank(cur) ? pathHTML(cur) : "") + '<div class="nextbody">' + nextAction(cur) + "</div></section>";
-    if (!S.diag) {
-      h += '<aside class="diag"><div><h2>Take the entrance diagnostic</h2><p>24 questions across all 12 weeks. It never lets you skip a week. It shows where your picture of trading starts, so the lessons can start there too. Guess freely and be honest about it.</p></div><a class="btn" href="#/diagnostic">Start the diagnostic</a></aside>';
-    } else {
-      h += '<aside class="diag done"><div><h2>Entrance diagnostic, ' + S.diag.score + " of " + S.diag.n + '</h2><p>Every week still needs its 100% exam.</p></div><a class="btn ghost" href="#/diagresult">See the breakdown</a></aside>';
-    }
-    var done = TA.WEEKS.filter(function (x) { return completed(x.n); }).length;
-    h += '<section class="road"><div class="sechead"><h2>The road to a tested edge</h2><p class="count">' + done + " of 12 weeks done</p></div>";
-    TA.PHASES.forEach(function (p) {
-      var ws = TA.WEEKS.filter(function (x) { return x.phase === p.id; });
-      h += '<div class="phase"><div class="phasehead"><h3>Phase ' + p.id + ". " + esc(p.name) + "</h3><p>" + esc(p.blurb) + '</p></div><ol class="rail">';
-      ws.forEach(function (x) {
-        var isDone = completed(x.n), un = unlocked(x.n), isCur = x.n === cur && !isDone;
-        var cls = isDone ? "done" : isCur ? "now" : un ? "todo" : "locked";
-        var status = isDone ? "Done" : isCur ? (x.lesson ? "You are here" : "Ready to be built") : !un ? "Locked" : "Open";
-        h += '<li class="' + cls + '"><a href="#/week/' + x.n + '"><span class="node" aria-hidden="true">' + (isDone ? CHECK : !un ? LOCK : "") + '</span><span class="wn">' + x.n + '</span><span class="wt"><b>' + esc(x.title) + "</b><span>" + esc(x.topic) + '</span></span><span class="ws">' + status + "</span></a></li>";
-      });
-      h += "</ol></div>";
+    var h = head("Trading Academy", "Two tracks, one rule", "Day trading and investing run side by side. Each week in each track needs a 100% exam before the next one opens. Study whichever you like on a given day.");
+    TA.TRACKS.forEach(function (T) {
+      var cur = currentWeek(T.id), w = week(cur);
+      h += '<section class="next track-' + T.id + '" aria-label="' + esc(T.name) + ' next step"><p class="trackname">' + esc(T.name) + ", week " + w.n + " of " + trackWeeks(T.id).length + '</p><h2 class="tt2">' + esc(w.title) + "</h2>" + (w.lesson && bank(cur) ? pathHTML(cur) : "") + '<div class="nextbody">' + nextAction(cur) + "</div></section>";
     });
-    h += "</section>";
-    h += gatePanel();
-    h += '<p class="foot">Progress is saved in this browser only. Back it up from Settings, especially before switching devices.</p>';
+    if (!S.diag) {
+      h += '<aside class="diag"><div><h2>Take the trading diagnostic</h2><p>24 questions across all 12 trading weeks. It never lets you skip a week. It shows where your picture of trading starts, so the lessons can start there too. Guess freely and be honest about it.</p></div><a class="btn" href="#/diagnostic">Start the diagnostic</a></aside>';
+    } else {
+      h += '<aside class="diag done"><div><h2>Trading diagnostic, ' + S.diag.score + " of " + S.diag.n + '</h2><p>Every week still needs its 100% exam.</p></div><a class="btn ghost" href="#/diagresult">See the breakdown</a></aside>';
+    }
+    TA.TRACKS.forEach(function (T) {
+      var ws = trackWeeks(T.id), cur = currentWeek(T.id);
+      var done = ws.filter(function (x) { return completed(x.id); }).length;
+      h += '<section class="road track-' + T.id + '"><div class="sechead"><h2>' + esc(T.road) + '</h2><p class="count">' + done + " of " + ws.length + ' weeks done</p></div><p class="roadblurb">' + esc(T.blurb) + "</p>";
+      T.phases.forEach(function (p) {
+        var pw = ws.filter(function (x) { return x.phase === p.id; });
+        h += '<div class="phase"><div class="phasehead"><h3>Phase ' + p.id + ". " + esc(p.name) + "</h3><p>" + esc(p.blurb) + '</p></div><ol class="rail">';
+        pw.forEach(function (x) {
+          var isDone = completed(x.id), un = unlocked(x.id), isCur = x.id === cur && !isDone;
+          var cls = isDone ? "done" : isCur ? "now" : un ? "todo" : "locked";
+          var status = isDone ? "Done" : isCur ? (x.lesson ? "You are here" : "Ready to be built") : !un ? "Locked" : "Open";
+          h += '<li class="' + cls + '"><a href="#/week/' + x.id + '"><span class="node" aria-hidden="true">' + (isDone ? CHECK : !un ? LOCK : "") + '</span><span class="wn">' + x.n + '</span><span class="wt"><b>' + esc(x.title) + "</b><span>" + esc(x.topic) + '</span></span><span class="ws">' + status + "</span></a></li>";
+        });
+        h += "</ol></div>";
+      });
+      h += "</section>";
+      if (T.id === "t") h += gatePanel();
+    });
+    h += '<p class="foot" id="syncfoot">' + Sync.footer() + "</p>";
     app.innerHTML = h;
   };
 
@@ -174,26 +295,26 @@
     var w = week(n), st = W(n);
     var line = function (title, body, btn) { return '<h2 class="nt">' + title + '</h2><p class="nb">' + body + "</p>" + (btn ? '<div class="row">' + btn + "</div>" : ""); };
     if (!w.lesson || !bank(n)) {
-      return line("Week " + n + " is ready to be built", "You passed everything before it. Tell Claude <b>Build Week " + n + " of the trading academy</b>. It will be written around what you got wrong so far.", '<a class="btn" href="#/week/' + n + '">See what Week ' + n + " covers</a>");
+      return line(lbl(n) + " is ready to be built", (w.n > 1 ? "You passed everything before it. " : "") + "Tell Claude <b>Build " + lbl(n) + "</b>. It will be written around what you got wrong so far.", '<a class="btn" href="#/week/' + n + '">See what it covers</a>');
     }
     if (!st.pretest) return line("Find your floor", "Five questions before you read anything. Wrong answers are expected and useful, they show where the lesson should start for you.", '<a class="btn pri" href="#/pretest/' + n + '">Start 5 questions</a>');
     if (!st.tasks.read) return line("Read the lesson", "Read every chapter and answer every green box. Then tick it off on the week page.", '<a class="btn pri" href="' + w.lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a>');
     if (!tasksDone(n)) return line("Finish this week's tasks", "Practice as much as you like while you work through them.", '<a class="btn pri" href="#/week/' + n + '">Open the tasks</a><a class="btn" href="#/practice/' + n + '">Practice questions</a>');
     if (st.review && st.review.length) return line("Clear your misses before retaking", st.review.length + " question" + (st.review.length > 1 ? "s" : "") + " from your last attempt, with fresh numbers.", '<a class="btn pri" href="#/review/' + n + '">Clear misses</a>');
-    if (!st.passed) return line("Take the Week " + n + " exam", bank(n).examSize + " questions drawn at random. You need every one right to unlock Week " + (n + 1) + ".", '<a class="btn pri" href="#/exam/' + n + '">Take the exam</a><a class="btn" href="#/practice/' + n + '">Practice first</a>');
+    if (!st.passed) return line("Take the " + lbl(n) + " exam", bank(n).examSize + " questions drawn at random. You need every one right to " + (sib(n, 1) ? "unlock " + lbl(sib(n, 1).id) : "finish the track") + ".", '<a class="btn pri" href="#/exam/' + n + '">Take the exam</a><a class="btn" href="#/practice/' + n + '">Practice first</a>');
     if (!gatesDone(n)) return line("Finish the journal requirements", "This week also needs logged trades. See the week page.", '<a class="btn pri" href="#/week/' + n + '">Week page</a>');
-    return line("Week " + n + " complete", "Everything is done.", "");
+    return line(lbl(n) + " complete", "Everything is done.", "");
   }
 
   // ------------------------------------------------------------------ week page
   routes.week = function (p) {
-    var n = parseInt(p[0], 10) || 1, w = week(n); if (!w) return go("#/");
-    var st = W(n), un = unlocked(n), b = bank(n);
-    var h = '<a class="back" href="#/">All weeks</a>' + head("Week " + n + ", " + esc(TA.PHASES[w.phase - 1].name), esc(w.title), esc(w.topic) + ".");
-    if (!un) h += '<div class="notice warn"><span class="ic">' + LOCK + "</span><p><b>Locked.</b> Finish Week " + (n - 1) + " first. Its exam needs 100%.</p></div>";
+    var n = wid(p), w = week(n); if (!w) return go("#/");
+    var st = W(n), un = unlocked(n), b = bank(n), prev = sib(n, -1), next = sib(n, 1);
+    var h = '<a class="back" href="#/">All weeks</a>' + head(esc(lbl(n)) + ", " + esc(phaseOf(w).name), esc(w.title), esc(w.topic) + ".");
+    if (!un) h += '<div class="notice warn"><span class="ic">' + LOCK + "</span><p><b>Locked.</b> Finish " + esc(lbl(prev.id)) + " first. Its exam needs 100%.</p></div>";
     h += '<section class="objectives"><h2>By the end of this week you can</h2><ul>' + w.objectives.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") + "</ul></section>";
     if (!w.lesson || !b) {
-      h += '<div class="notice"><p><b>Not built yet.</b> Each week is written when you reach it, aimed at your mistakes so far. When Week ' + (n - 1) + " is done, tell Claude <b>Build Week " + n + " of the trading academy</b>.</p></div>";
+      h += '<div class="notice"><p><b>Not built yet.</b> Each week is written when you reach it, aimed at your mistakes so far. ' + (prev ? "When " + esc(lbl(prev.id)) + " is done, tell" : "Tell") + " Claude <b>Build " + esc(lbl(n)) + "</b>.</p></div>";
       app.innerHTML = h; return;
     }
     if (!un) { app.innerHTML = h; return; }
@@ -201,7 +322,7 @@
     var reqs = [["Exam passed at 100%", st.passed], ["All tasks done", tasksDone(n)]];
     (w.gates || []).forEach(function (g) { var gs = gateStatus(g); reqs.push([g.label + " (" + gs.val + ")", gs.ok]); });
     var met = reqs.filter(function (r) { return r[1]; }).length;
-    h += '<section class="unlock"><h2>To unlock Week ' + (n + 1) + '</h2><p class="count">' + met + " of " + reqs.length + ' met</p><ul class="checks">' + reqs.map(function (r) { return '<li class="' + (r[1] ? "ok" : "") + '"><span class="tick">' + (r[1] ? CHECK : "") + "</span>" + esc(r[0]) + "</li>"; }).join("") + "</ul></section>";
+    h += '<section class="unlock"><h2>' + (next ? "To unlock " + esc(lbl(next.id)) : "To finish the " + esc(track(w.track).name.toLowerCase()) + " track") + '</h2><p class="count">' + met + " of " + reqs.length + ' met</p><ul class="checks">' + reqs.map(function (r) { return '<li class="' + (r[1] ? "ok" : "") + '"><span class="tick">' + (r[1] ? CHECK : "") + "</span>" + esc(r[0]) + "</li>"; }).join("") + "</ul></section>";
 
     var S5 = steps(n), last = st.exams[st.exams.length - 1];
     function stepCls(i) { var s = S5[i]; return s.done ? "done" : s.now ? "now" : s.open ? "open" : "todo"; }
@@ -213,7 +334,7 @@
     h += stepHead(0, "Find your floor", "Five questions before the lesson, so you know what is new. Not graded.") +
       (st.pretest ? '<p class="sdone">Done. You got ' + st.pretest.score + " of " + st.pretest.n + '.</p><a class="btn sm" href="#/pretest/' + n + '">Do it again</a>' : '<a class="btn pri" href="#/pretest/' + n + '">Start</a>') + "</div></li>";
     // 2 lesson
-    h += stepHead(1, "Read the lesson", "The full story, with every interactive. Answer every green box, then tick the first task below.") + '<a class="btn' + (S5[1].now ? " pri" : "") + '" href="' + w.lesson + '">Open the Week ' + n + " lesson</a></div></li>";
+    h += stepHead(1, "Read the lesson", "The full story, with every interactive. Answer every green box, then tick the first task below.") + '<a class="btn' + (S5[1].now ? " pri" : "") + '" href="' + w.lesson + '">Open the ' + esc(lbl(n)) + " lesson</a></div></li>";
     // 3 practice
     h += stepHead(2, "Practice, any time", "Unlimited questions from the exam bank, with explanations. Questions you miss come back more often, and calculation questions get new numbers every time.") + '<div class="row"><a class="btn" href="#/practice/' + n + '">Practice</a><span class="meta">' + S5[2].note + "</span></div></div></li>";
     // 4 tasks
@@ -241,7 +362,7 @@
       var wc = function () { var n2 = (ta.value.trim().match(/\S+/g) || []).length; document.getElementById("wc").textContent = n2 + " words"; };
       ta.addEventListener("input", function () { st.teach = ta.value; save(); wc(); }); wc();
       document.getElementById("copyTeach").addEventListener("click", function () {
-        var txt = "Grade my Week " + n + " teach-back for the trading academy. Be strict, tell me what is right, wrong and missing.\n\n" + ta.value;
+        var txt = "Grade my " + lbl(n) + " teach-back for the trading academy. Be strict, tell me what is right, wrong and missing.\n\n" + ta.value;
         (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { toast("Copied. Paste it to Claude."); }, function () { ta.select(); toast("Select all and copy it manually."); });
       });
     }
@@ -295,64 +416,64 @@
   }
 
   routes.pretest = function (p) {
-    var n = parseInt(p[0], 10) || 1, b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
+    var n = wid(p), b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
     var items = R.shuffle(b.items).slice(0, 5), i = 0;
-    session({ kicker: "Week " + n + ", find your floor", title: "Five questions before the lesson", sub: "Answer from what you know now. Guessing is fine. This is not graded.", total: 5, back: "#/week/" + n,
+    session({ kicker: lbl(n) + ", find your floor", title: "Five questions before the lesson", sub: "Answer from what you know now. Guessing is fine. This is not graded.", total: 5, back: "#/week/" + n,
       topicName: function (inst) { return b.topics[inst.topic]; },
       next: function () { return i < items.length ? instance(items[i++]) : null; },
-      onAnswer: function (inst, ok) { stat(inst.id, ok); },
+      onAnswer: function (inst, ok) { stat(qkey(n, inst.id), ok); },
       onEnd: function (right, count) {
         W(n).pretest = { score: right, n: count, date: Date.now() }; save();
-        app.innerHTML = endCard("Week " + n, "Floor found", right + " of " + count, right >= 4 ? "You already have some of this. Read the lesson anyway, the exam asks for the mechanism, not the vocabulary." : "Good. That is what the lesson is for. Every one of those ideas is built from the ground up.",
+        app.innerHTML = endCard(lbl(n), "Floor found", right + " of " + count, right >= 4 ? "You already have some of this. Read the lesson anyway, the exam asks for the mechanism, not the vocabulary." : "Good. That is what the lesson is for. Every one of those ideas is built from the ground up.",
           '<a class="btn pri" href="' + week(n).lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a>');
       } });
   };
 
   routes.practice = function (p) {
-    var n = parseInt(p[0], 10) || 1, b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
+    var n = wid(p), b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
     var lastId = null;
-    session({ kicker: "Week " + n + ", practice", title: "Practice", sub: "As many as you want. Missed questions come back more often. Stop whenever you like.", back: "#/week/" + n,
+    session({ kicker: lbl(n) + ", practice", title: "Practice", sub: "As many as you want. Missed questions come back more often. Stop whenever you like.", back: "#/week/" + n,
       topicName: function (inst) { return b.topics[inst.topic]; },
       next: function () {
         var pool = b.items.filter(function (it) { return it.id !== lastId; });
-        var weights = pool.map(function (it) { var s = S.qstats[it.id]; return 1 + (s ? s.miss * 3 : 0) + (s ? 0 : 1); });
+        var weights = pool.map(function (it) { var s = S.qstats[qkey(n, it.id)]; return 1 + (s ? s.miss * 3 : 0) + (s ? 0 : 1); });
         var tot = weights.reduce(function (a, c) { return a + c; }, 0), r = Math.random() * tot, k = 0;
         while (r > weights[k]) { r -= weights[k]; k++; }
         lastId = pool[k].id; return instance(pool[k]);
       },
-      onAnswer: function (inst, ok) { stat(inst.id, ok); },
+      onAnswer: function (inst, ok) { stat(qkey(n, inst.id), ok); },
       onEnd: function () {} });
   };
 
   routes.review = function (p) {
-    var n = parseInt(p[0], 10) || 1, b = bank(n), st = W(n);
+    var n = wid(p), b = bank(n), st = W(n);
     if (!b || !st.review || !st.review.length) return go("#/week/" + n);
     var queue = st.review.slice(), cleared = 0, startN = queue.length;
-    session({ kicker: "Week " + n + ", clear your misses", title: "Get each one right", sub: "Each missed question comes back, with fresh numbers where it has numbers. A wrong answer sends it to the back of the line.", back: "#/week/" + n,
+    session({ kicker: lbl(n) + ", clear your misses", title: "Get each one right", sub: "Each missed question comes back, with fresh numbers where it has numbers. A wrong answer sends it to the back of the line.", back: "#/week/" + n,
       topicName: function (inst) { return b.topics[inst.topic] + ", " + cleared + " of " + startN + " cleared"; },
       next: function () { if (!queue.length) return null; var it = itemById(b, queue[0]); return instance(it); },
       onAnswer: function (inst, ok) {
-        stat(inst.id, ok);
+        stat(qkey(n, inst.id), ok);
         var id = queue.shift();
         if (ok) cleared++; else queue.push(id);
         st.review = queue.slice();
       },
       onEnd: function () {
         st.review = null; save();
-        app.innerHTML = endCard("Week " + n, "Misses cleared", "", "The retake is unlocked. It will be a completely new draw from the bank.",
+        app.innerHTML = endCard(lbl(n), "Misses cleared", "", "The retake is unlocked. It will be a completely new draw from the bank.",
           '<a class="btn pri" href="#/exam/' + n + '">Retake the exam</a><a class="btn" href="#/practice/' + n + '">Practice more first</a>');
       } });
   };
 
   routes.diagnostic = function () {
     var items = TA.DIAGNOSTIC.slice(), i = 0, res = [];
-    session({ kicker: "Entrance diagnostic", title: "Where your picture starts", sub: "24 questions across all 12 weeks. Later questions cover things you have not been taught yet, so expect to miss them.", total: items.length, back: "#/",
-      topicName: function (inst) { return "Week " + inst.w; },
+    session({ kicker: "Trading diagnostic", title: "Where your picture starts", sub: "24 questions across all 12 trading weeks. Later questions cover things you have not been taught yet, so expect to miss them.", total: items.length, back: "#/",
+      topicName: function (inst) { return "Trading Week " + inst.w; },
       next: function () { if (i >= items.length) return null; var it = items[i++]; var inst = prep({ type: "mcq", q: it.q, opts: it.opts, ex: it.ex }); inst.w = it.w; return inst; },
       onAnswer: function (inst, ok) { res.push({ w: inst.w, ok: ok }); },
       onEnd: function (right, count) {
-        var byPhase = TA.PHASES.map(function (ph) {
-          var ws = TA.WEEKS.filter(function (x) { return x.phase === ph.id; }).map(function (x) { return x.n; });
+        var byPhase = track("t").phases.map(function (ph) {
+          var ws = trackWeeks("t").filter(function (x) { return x.phase === ph.id; }).map(function (x) { return x.n; });
           var r = res.filter(function (x) { return ws.indexOf(x.w) >= 0; });
           return { name: ph.name, right: r.filter(function (x) { return x.ok; }).length, n: r.length };
         });
@@ -362,7 +483,7 @@
   };
   routes.diagresult = function () {
     if (!S.diag) return go("#/");
-    var h = '<div class="focus">' + head("Entrance diagnostic", S.diag.score + " of " + S.diag.n + " right") + '<section class="result"><ul class="phasebars">';
+    var h = '<div class="focus">' + head("Trading diagnostic", S.diag.score + " of " + S.diag.n + " right") + '<section class="result"><ul class="phasebars">';
     S.diag.byPhase.forEach(function (ph, i) {
       h += '<li><span class="pbn">Phase ' + (i + 1) + ". " + esc(ph.name) + '</span><span class="pbv">' + ph.right + " of " + ph.n + '</span><span class="meter"><i style="width:' + (ph.n ? ph.right / ph.n * 100 : 0) + '%"></i></span></li>';
     });
@@ -383,12 +504,12 @@
   }
 
   routes.exam = function (p) {
-    var n = parseInt(p[0], 10) || 1, b = bank(n), st = W(n);
+    var n = wid(p), b = bank(n), st = W(n);
     if (!b || !unlocked(n)) return go("#/week/" + n);
     if (st.review && st.review.length) return go("#/review/" + n);
     var qs = compose(b), ans = new Array(qs.length);
     if (/debug/.test(location.search)) window.__exam = qs;
-    var h = '<div class="focus exam"><a class="back" href="#/week/' + n + '">Leave without submitting</a>' + head("Week " + n + " exam", qs.length + " questions. Every one right.", "No feedback until you submit. Work calculations on paper. Numeric answers accept commas.");
+    var h = '<div class="focus exam"><a class="back" href="#/week/' + n + '">Leave without submitting</a>' + head(lbl(n) + " exam", qs.length + " questions. Every one right.", "No feedback until you submit. Work calculations on paper. Numeric answers accept commas.");
     h += qs.map(function (q, i) { return qHTML(q, i, { topic: b.topics[q.topic], label: "Question " + (i + 1) + " of " + qs.length }); }).join("");
     h += '<div class="submitbar"><div class="sbin"><span class="meter"><i id="ansbar" style="width:0%"></i></span><span class="meta" id="answered">0 of ' + qs.length + ' answered</span><button class="btn pri" id="submit" type="button" disabled>Submit exam</button></div></div></div>';
     app.innerHTML = h;
@@ -406,15 +527,16 @@
       var inp = qe.querySelector("input"); if (inp) inp.addEventListener("input", function () { ans[i] = inp.value; qe.classList.toggle("answered", !!inp.value.trim()); upd(); });
     });
     document.getElementById("submit").addEventListener("click", function () {
-      var res = qs.map(function (q, i) { var ok = grade(q, ans[i]); stat(q.id, ok); return ok; });
+      var res = qs.map(function (q, i) { var ok = grade(q, ans[i]); stat(qkey(n, q.id), ok); return ok; });
       var score = res.filter(Boolean).length, passed = score === qs.length;
       var missed = []; qs.forEach(function (q, i) { if (!res[i]) missed.push(q.id); });
       st.exams.push({ date: Date.now(), score: score, n: qs.length, missed: missed, passed: passed });
       if (passed) { st.passed = true; st.review = null; } else st.review = missed;
       save();
-      var o = '<div class="focus">' + head("Week " + n + " exam", passed ? "Passed" : "Not yet") + '<section class="result ' + (passed ? "pass" : "fail") + '"><p class="score">' + score + "/" + qs.length + "</p>";
+      var o = '<div class="focus">' + head(lbl(n) + " exam", passed ? "Passed" : "Not yet") + '<section class="result ' + (passed ? "pass" : "fail") + '"><p class="score">' + score + "/" + qs.length + "</p>";
       if (passed) {
-        o += "<p>" + (tasksDone(n) && gatesDone(n) ? "Week " + (n + 1) + " is unlocked." : "Finish the remaining tasks on the week page to unlock Week " + (n + 1) + ".") + '</p><div class="row"><a class="btn pri" href="#/week/' + n + '">Week page</a><a class="btn" href="#/">Academy</a></div>';
+        var nx = sib(n, 1), nxl = nx ? lbl(nx.id) : "the end of the track";
+        o += "<p>" + (tasksDone(n) && gatesDone(n) ? (nx ? nxl + " is unlocked." : "You have finished the track.") : "Finish the remaining tasks on the week page to " + (nx ? "unlock " + nxl : "finish the track") + ".") + '</p><div class="row"><a class="btn pri" href="#/week/' + n + '">Week page</a><a class="btn" href="#/">Academy</a></div>';
       } else {
         o += "<p>You missed " + missed.length + ". Read each explanation below. Then clear those questions again, with fresh numbers, before a new exam draw unlocks.</p><div class=\"row\"><a class=\"btn pri\" href=\"#/review/" + n + '">Clear your misses</a></div>';
       }
@@ -460,9 +582,9 @@
 
   function gatePanel() {
     var G = TA.REAL_MONEY_GATE, trs = sorted().filter(function (t) { return t.mode === G.mode; }), s = stats(trs);
-    var weeksDone = TA.WEEKS.filter(function (w) { return completed(w.n); }).length;
+    var weeksDone = trackWeeks("t").filter(function (w) { return completed(w.id); }).length;
     var rows = [
-      ["All 12 weeks complete", weeksDone + " of 12", weeksDone >= G.minWeeks],
+      ["All 12 trading weeks complete", weeksDone + " of 12", weeksDone >= G.minWeeks],
       ["At least " + G.minTrades + " sim trades on your written setup", (s.n || 0) + " of " + G.minTrades, (s.n || 0) >= G.minTrades],
       ["Edge statistically real, with a t statistic of expectancy of at least " + G.minT.toFixed(1), s.n > 1 ? s.t.toFixed(2) : "not enough trades", s.n > 1 && s.t >= G.minT],
       ["Rules followed on at least " + pct(G.minAdherence) + " of sim trades", s.n ? pct(s.adh) : "no trades", s.n && s.adh >= G.minAdherence]
@@ -552,7 +674,7 @@
       var armed = false;
       b.addEventListener("click", function () {
         if (!armed) { armed = true; b.textContent = "Sure?"; b.classList.add("danger"); setTimeout(function () { armed = false; b.textContent = "Delete"; b.classList.remove("danger"); }, 3000); return; }
-        var id = +b.getAttribute("data-del"); S.journal = S.journal.filter(function (t) { return t.id !== id; }); save(); routes.journal();
+        var id = +b.getAttribute("data-del"); S.journal = S.journal.filter(function (t) { return t.id !== id; }); S.deleted = (S.deleted || []).concat([id]); save(); routes.journal();
       });
     });
     document.getElementById("j_csv").addEventListener("click", function () {
@@ -624,13 +746,27 @@
   // ------------------------------------------------------------------ settings
   routes.settings = function () {
     var set = S.settings;
-    var h = head("Settings", "Rules and backups");
+    var h = head("Settings", "Sync, rules and backups");
+    if (Sync.on()) {
+      h += '<section class="panel sync"><h2>Cloud sync is on</h2><p class="meta" id="syncstat">' + esc(Sync.footer()) + '</p><p>To use the academy on another device, open it there, go to Settings, and paste this code under Link this device. Keep it private, anyone with it can see and change your progress.</p><p class="code" id="s_code">' + esc(Sync.code()) + '</p><div class="row"><button class="btn" id="s_copy" type="button">Copy the code</button><button class="btn" id="s_now" type="button">Sync now</button><button class="btn ghost" id="s_off" type="button">Turn off on this device</button></div></section>';
+    } else {
+      h += '<section class="panel sync"><h2>Cloud sync</h2><p class="meta">Right now your progress lives only in this browser. Turn on sync to keep it safe and use it on your laptop and your iPad.</p><div class="row"><button class="btn pri" id="s_on" type="button">Turn on cloud sync</button></div><h3>Link this device</h3><p class="meta">Already turned it on somewhere else? Paste that sync code here. Progress from both places is combined.</p><div class="row"><input id="s_link" class="codein" placeholder="ta-xxxxx-xxxxx-xxxxx-xxxxx" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="s_linkbtn" type="button">Link</button></div></section>';
+    }
     h += '<section class="panel"><h2>Daily trading limits</h2><p class="meta">Set these before you trade, never during. The journal tells you to stop when you hit either one.</p><div class="grid">' +
       fld("Daily loss limit, in R", '<input id="s_loss" inputmode="decimal" value="' + set.dailyLossR + '">') + fld("Max trades per day", '<input id="s_max" inputmode="numeric" value="' + set.maxTrades + '">') +
       '</div><div class="row"><button class="btn pri" id="s_save" type="button">Save limits</button></div></section>';
-    h += '<section class="panel"><h2>Backup</h2><p class="meta">Everything lives in this browser. Export a file now and then, and import it on any other device.</p><div class="row"><button class="btn" id="s_exp" type="button">Export backup</button><label class="btn">Import backup<input type="file" id="s_imp" accept=".json,application/json" hidden></label></div></section>';
-    h += '<section class="panel danger"><h2>Start over</h2><p class="meta">Erases all progress, exams and journal trades in this browser. Export first.</p><button class="btn danger" id="s_reset" type="button">Erase everything</button></section>';
+    h += '<section class="panel"><h2>Backup file</h2><p class="meta">A file copy of everything, as a second safety net. Import it on any device to restore.</p><div class="row"><button class="btn" id="s_exp" type="button">Export backup</button><label class="btn">Import backup<input type="file" id="s_imp" accept=".json,application/json" hidden></label></div></section>';
+    h += '<section class="panel danger"><h2>Start over</h2><p class="meta">Erases all progress, exams and journal trades in this browser and turns sync off here. The cloud copy is kept. Export first.</p><button class="btn danger" id="s_reset" type="button">Erase everything</button></section>';
     app.innerHTML = h;
+    function el(id) { return document.getElementById(id); }
+    if (el("s_on")) el("s_on").addEventListener("click", function () { el("s_on").disabled = true; Sync.enable().then(function () { toast("Cloud sync is on."); routes.settings(); }); });
+    if (el("s_linkbtn")) el("s_linkbtn").addEventListener("click", function () {
+      el("s_linkbtn").disabled = true;
+      Sync.link(el("s_link").value).then(function () { toast("Linked. Your progress is combined."); routes.settings(); }, function (e) { el("s_linkbtn").disabled = false; toast(e.message || "Could not link."); });
+    });
+    if (el("s_copy")) el("s_copy").addEventListener("click", function () { (navigator.clipboard ? navigator.clipboard.writeText(Sync.code()) : Promise.reject()).then(function () { toast("Code copied."); }, function () { toast("Select the code and copy it by hand."); }); });
+    if (el("s_now")) el("s_now").addEventListener("click", function () { Sync.now().then(function () { toast("Synced."); routes.settings(); }); });
+    if (el("s_off")) el("s_off").addEventListener("click", function () { Sync.off(); toast("Sync is off on this device. Your progress stays here."); routes.settings(); });
     document.getElementById("s_save").addEventListener("click", function () {
       var l = parseFloat(document.getElementById("s_loss").value), m = parseInt(document.getElementById("s_max").value, 10);
       if (!(l > 0) || !(m > 0)) { toast("Both limits must be positive."); return; }
@@ -639,14 +775,28 @@
     document.getElementById("s_exp").addEventListener("click", function () { download("trading-academy-backup-" + today() + ".json", JSON.stringify(S, null, 1), "application/json"); });
     document.getElementById("s_imp").addEventListener("change", function (e) {
       var f = e.target.files[0]; if (!f) return;
-      f.text().then(function (txt) { try { var o = JSON.parse(txt); if (o.v !== 1) throw 0; S = o; save(); toast("Backup restored."); go("#/"); } catch (er) { toast("That file is not an academy backup."); } });
+      f.text().then(function (txt) { try { var o = JSON.parse(txt); if (o.v !== 1) throw 0; S = migrate(o); save(); toast("Backup restored."); go("#/"); } catch (er) { toast("That file is not an academy backup."); } });
     });
     var armed = false, rb = document.getElementById("s_reset");
     rb.addEventListener("click", function () {
       if (!armed) { armed = true; rb.textContent = "Press again to erase everything"; setTimeout(function () { armed = false; rb.textContent = "Erase everything"; }, 4000); return; }
-      S = fresh(); save(); toast("Erased."); go("#/");
+      Sync.off(); S = migrate(fresh()); save(); toast("Erased. Cloud sync is off on this device."); go("#/");
     });
   };
 
-  nav();
+  // Pull from the cloud before the first render, but never wait more than four seconds.
+  var SAFE = ["home", "week", "journal", "settings", "diagresult"];
+  function safeRoute() { return SAFE.indexOf((location.hash.replace(/^#\/?/, "") || "home").split("/")[0]) >= 0; }
+  if (Sync.on()) {
+    app.innerHTML = '<p class="loading">Syncing your progress.</p>';
+    var rendered = false;
+    var t0 = setTimeout(function () { if (!rendered) { rendered = true; nav(); } }, 4000);
+    Sync.now().then(function (changed) {
+      clearTimeout(t0);
+      if (!rendered) { rendered = true; nav(); } else if (changed && safeRoute()) nav();
+    });
+  } else nav();
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && Sync.on() && safeRoute()) Sync.now().then(function (ch) { if (ch && safeRoute()) nav(); });
+  });
 })();

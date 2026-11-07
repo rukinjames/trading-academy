@@ -590,8 +590,8 @@ TA.BANKS = TA.BANKS || {};
   // The slippage topic holds only generators on purpose. The app's composer takes one item per topic and then
   // has only 3 free slots left (15 minus 12 topics) to reach its minimum of 4 calculation questions, so at least one
   // topic must be generator only or some exams would get just 3.
-  TA.BANKS[1] = {
-    week: 1,
+  TA.BANKS["t1"] = {
+    week: "t1",
     examSize: 15,
     topics: { price: "What a price is", book: "The order book", spread: "Spread and mid", priority: "Price time priority", orders: "Order types", slippage: "Fills and slippage", stops: "Stop orders", sides: "Aggressors and price moves", makers: "Market makers and HFT", zerosum: "Who pays you", crash: "May 6, 2010", candles: "Candles" },
     items: items
