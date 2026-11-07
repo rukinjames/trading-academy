@@ -33,12 +33,15 @@
   };
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function toast(msg) {
-    var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+    var t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = msg; document.body.appendChild(t);
     setTimeout(function () { t.remove(); }, 2600);
   }
   function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   function f2(x) { return (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2); }
   function pct(x) { return Math.round(x * 100) + "%"; }
+  var LETTERS = "ABCDEFGH";
+  var CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var LOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.2" y="7" width="9.6" height="7" rx="1.6" fill="currentColor"/><path d="M5.3 7V5.2a2.7 2.7 0 0 1 5.4 0V7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 
   // ------------------------------------------------------------------ progress logic
   function tasksDone(n) {
@@ -61,6 +64,29 @@
   function unlocked(n) { return n === 1 || completed(n - 1); }
   function currentWeek() { for (var n = 1; n <= 12; n++) if (!completed(n)) return n; return 12; }
 
+  // The five steps of a week, for display. Practice is open at any time and never blocks.
+  function steps(n) {
+    var w = week(n), st = W(n), b = bank(n);
+    var seen = b ? b.items.filter(function (it) { return S.qstats[it.id]; }).length : 0;
+    var s = [
+      { k: "floor", label: "Find your floor", done: !!st.pretest, href: "#/pretest/" + n },
+      { k: "lesson", label: "Lesson", done: !!st.tasks.read, href: w.lesson || ("#/week/" + n) },
+      { k: "practice", label: "Practice", open: true, href: "#/practice/" + n, note: b ? (seen + " of " + b.items.length + " seen") : "" },
+      { k: "tasks", label: "Tasks", done: tasksDone(n), href: "#/week/" + n },
+      { k: "exam", label: "Exam", done: !!st.passed, href: "#/exam/" + n }
+    ];
+    var cur = s.filter(function (x) { return !x.open && !x.done; })[0];
+    if (cur) cur.now = true;
+    return s;
+  }
+  function pathHTML(n) {
+    return '<ol class="path" aria-label="This week\'s steps">' + steps(n).map(function (s) {
+      var cls = s.done ? "done" : s.now ? "now" : s.open ? "open" : "todo";
+      var state = s.done ? "done" : s.now ? "you are here" : s.open ? "any time" : "not yet";
+      return '<li class="' + cls + '"><span class="node" aria-hidden="true">' + (s.done ? CHECK : "") + '</span><span class="pl">' + s.label + '</span><span class="sr"> ' + state + "</span></li>";
+    }).join("") + "</ol>";
+  }
+
   // ------------------------------------------------------------------ question instances
   function prep(g) {
     if (g.type === "mcq") g.choices = R.shuffle(g.opts.map(function (t, i) { return { t: t, ok: i === 0 }; }));
@@ -78,7 +104,8 @@
   }
   function rightText(inst) {
     if (inst.type === "mcq") return inst.choices.filter(function (c) { return c.ok; })[0].t;
-    return String(inst.answer);
+    var x = inst.answer, d = Math.abs(x * 100 - Math.round(x * 100)) < 1e-9 ? 2 : Math.abs(x * 1000 - Math.round(x * 1000)) < 1e-9 ? 3 : 2;
+    return Number.isInteger(x) ? x.toLocaleString("en-US") : x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
   }
   function stat(id, ok) {
     var s = S.qstats[id] || (S.qstats[id] = { seen: 0, miss: 0 });
@@ -86,14 +113,14 @@
   }
   function qHTML(inst, i, opts) {
     opts = opts || {};
-    var h = '<div class="q" data-i="' + i + '"><p class="qn"><span>' + (opts.label || ("Question " + (i + 1))) + "</span>" + (opts.topic ? "<span>" + esc(opts.topic) + "</span>" : "") + "</p>";
+    var h = '<article class="q" data-i="' + i + '"><header class="qn"><span class="qnum">' + (opts.label || ("Question " + (i + 1))) + "</span>" + (opts.topic ? '<span class="qtopic">' + esc(opts.topic) + "</span>" : "") + "</header>";
     h += '<div class="qt">' + inst.q + "</div>";
     if (inst.type === "mcq") {
-      h += '<div class="opts">' + inst.choices.map(function (c, k) { return '<button type="button" class="opt" data-k="' + k + '">' + esc(c.t) + "</button>"; }).join("") + "</div>";
+      h += '<div class="opts">' + inst.choices.map(function (c, k) { return '<button type="button" class="opt" data-k="' + k + '"><span class="ol" aria-hidden="true">' + LETTERS[k] + '</span><span class="ot">' + esc(c.t) + "</span></button>"; }).join("") + "</div>";
     } else {
-      h += '<div class="num"><input type="text" inputmode="decimal" autocomplete="off" placeholder="your answer" aria-label="Your answer"></div>';
+      h += '<div class="num"><input type="text" inputmode="decimal" autocomplete="off" placeholder="Your answer" aria-label="Your answer"></div>';
     }
-    return h + '<div class="fbx"></div></div>';
+    return h + '<div class="fbx" aria-live="polite"></div></article>';
   }
 
   // ------------------------------------------------------------------ router
@@ -102,47 +129,58 @@
   function nav() {
     var h = location.hash.replace(/^#\/?/, "") || "home";
     var parts = h.split("/");
-    document.querySelectorAll(".nav a").forEach(function (a) { a.classList.toggle("on", a.getAttribute("data-r") === parts[0]); });
+    var section = { week: "home", pretest: "home", practice: "home", review: "home", exam: "home", diagnostic: "home", diagresult: "home" }[parts[0]] || parts[0];
+    document.querySelectorAll(".nav a").forEach(function (a) { a.classList.toggle("on", a.getAttribute("data-r") === section); });
     var fn = routes[parts[0]] || routes.home;
     window.scrollTo(0, 0);
     fn(parts.slice(1));
   }
   window.addEventListener("hashchange", nav);
 
+  function head(where, title, lede) {
+    return '<header class="pagehead"><p class="where">' + where + "</p><h1>" + title + "</h1>" + (lede ? '<p class="lede">' + lede + "</p>" : "") + "</header>";
+  }
+
   // ------------------------------------------------------------------ home
   routes.home = function () {
-    var cur = currentWeek(), w = week(cur), st = W(cur);
-    var h = '<p class="kicker">Week ' + cur + " of 12 · " + esc(TA.PHASES[w.phase - 1].name) + "</p>";
-    h += "<h1>" + esc(w.title) + "</h1><p class=\"lede\">" + esc(w.topic) + ".</p>";
-    h += '<div class="card hero">' + nextAction(cur) + "</div>";
+    var cur = currentWeek(), w = week(cur);
+    var h = head("Week " + cur + " of 12, " + esc(TA.PHASES[w.phase - 1].name), esc(w.title), esc(w.topic) + ".");
+    h += '<section class="next" aria-label="Your next step">' + (w.lesson && bank(cur) ? pathHTML(cur) : "") + '<div class="nextbody">' + nextAction(cur) + "</div></section>";
     if (!S.diag) {
-      h += '<div class="card"><h3>Take the entrance diagnostic</h3><p class="muted">24 questions across all 12 weeks. It does not let you skip anything, every week still needs its 100% exam. It shows where your picture of trading starts, so the lessons can start there too. Guess freely and be honest about it.</p><a class="btn" href="#/diagnostic">Start the diagnostic</a></div>';
+      h += '<aside class="diag"><div><h2>Take the entrance diagnostic</h2><p>24 questions across all 12 weeks. It never lets you skip a week. It shows where your picture of trading starts, so the lessons can start there too. Guess freely and be honest about it.</p></div><a class="btn" href="#/diagnostic">Start the diagnostic</a></aside>';
+    } else {
+      h += '<aside class="diag done"><div><h2>Entrance diagnostic, ' + S.diag.score + " of " + S.diag.n + '</h2><p>Every week still needs its 100% exam.</p></div><a class="btn ghost" href="#/diagresult">See the breakdown</a></aside>';
     }
-    h += "<h2>The roadmap</h2>";
+    var done = TA.WEEKS.filter(function (x) { return completed(x.n); }).length;
+    h += '<section class="road"><div class="sechead"><h2>The road to a tested edge</h2><p class="count">' + done + " of 12 weeks done</p></div>";
     TA.PHASES.forEach(function (p) {
-      h += '<div class="phase"><h3>Phase ' + p.id + ". " + esc(p.name) + "</h3><p>" + esc(p.blurb) + "</p></div>";
-      TA.WEEKS.filter(function (x) { return x.phase === p.id; }).forEach(function (x) {
-        var done = completed(x.n), un = unlocked(x.n), isCur = x.n === cur;
-        var pill = done ? '<span class="pill done">Done</span>' : !un ? '<span class="pill lock">Locked</span>' : !x.lesson ? '<span class="pill cur">Not built yet</span>' : '<span class="pill cur">In progress</span>';
-        h += '<a class="wk' + (un ? "" : " locked") + (isCur ? " current" : "") + '" href="#/week/' + x.n + '"><span class="num">' + x.n + '</span><span><span class="t">' + esc(x.title) + '</span><br><span class="s">' + esc(x.topic) + "</span></span>" + pill + "</a>";
+      var ws = TA.WEEKS.filter(function (x) { return x.phase === p.id; });
+      h += '<div class="phase"><div class="phasehead"><h3>Phase ' + p.id + ". " + esc(p.name) + "</h3><p>" + esc(p.blurb) + '</p></div><ol class="rail">';
+      ws.forEach(function (x) {
+        var isDone = completed(x.n), un = unlocked(x.n), isCur = x.n === cur && !isDone;
+        var cls = isDone ? "done" : isCur ? "now" : un ? "todo" : "locked";
+        var status = isDone ? "Done" : isCur ? (x.lesson ? "You are here" : "Ready to be built") : !un ? "Locked" : "Open";
+        h += '<li class="' + cls + '"><a href="#/week/' + x.n + '"><span class="node" aria-hidden="true">' + (isDone ? CHECK : !un ? LOCK : "") + '</span><span class="wn">' + x.n + '</span><span class="wt"><b>' + esc(x.title) + "</b><span>" + esc(x.topic) + '</span></span><span class="ws">' + status + "</span></a></li>";
       });
+      h += "</ol></div>";
     });
-    h += "<h2>The real money gate</h2>" + gatePanel();
+    h += "</section>";
+    h += gatePanel();
     h += '<p class="foot">Progress is saved in this browser only. Back it up from Settings, especially before switching devices.</p>';
     app.innerHTML = h;
   };
 
   function nextAction(n) {
     var w = week(n), st = W(n);
-    var line = function (title, body, btn) { return "<h3 style=\"margin-top:0\">" + title + '</h3><p class="muted">' + body + "</p>" + (btn || ""); };
+    var line = function (title, body, btn) { return '<h2 class="nt">' + title + '</h2><p class="nb">' + body + "</p>" + (btn ? '<div class="row">' + btn + "</div>" : ""); };
     if (!w.lesson || !bank(n)) {
       return line("Week " + n + " is ready to be built", "You passed everything before it. Tell Claude <b>Build Week " + n + " of the trading academy</b>. It will be written around what you got wrong so far.", '<a class="btn" href="#/week/' + n + '">See what Week ' + n + " covers</a>");
     }
-    if (!st.pretest) return line("Step 1. Find your floor", "Five questions before you read anything. Wrong answers are expected and useful.", '<a class="btn pri" href="#/pretest/' + n + '">Start 5 questions</a>');
-    if (!st.tasks.read) return line("Step 2. Read the lesson", "Read every chapter and answer every green box. Then tick it off on the week page.", '<div class="row"><a class="btn pri" href="' + w.lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a></div>');
-    if (!tasksDone(n)) return line("Step 3. Finish this week's tasks", "Practice as much as you like while you work through them.", '<div class="row"><a class="btn pri" href="#/week/' + n + '">Open the tasks</a><a class="btn" href="#/practice/' + n + '">Practice questions</a></div>');
+    if (!st.pretest) return line("Find your floor", "Five questions before you read anything. Wrong answers are expected and useful, they show where the lesson should start for you.", '<a class="btn pri" href="#/pretest/' + n + '">Start 5 questions</a>');
+    if (!st.tasks.read) return line("Read the lesson", "Read every chapter and answer every green box. Then tick it off on the week page.", '<a class="btn pri" href="' + w.lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a>');
+    if (!tasksDone(n)) return line("Finish this week's tasks", "Practice as much as you like while you work through them.", '<a class="btn pri" href="#/week/' + n + '">Open the tasks</a><a class="btn" href="#/practice/' + n + '">Practice questions</a>');
     if (st.review && st.review.length) return line("Clear your misses before retaking", st.review.length + " question" + (st.review.length > 1 ? "s" : "") + " from your last attempt, with fresh numbers.", '<a class="btn pri" href="#/review/' + n + '">Clear misses</a>');
-    if (!st.passed) return line("Step 4. The Week " + n + " exam", bank(n).examSize + " questions drawn at random. You need every one right to unlock Week " + (n + 1) + ".", '<div class="row"><a class="btn pri" href="#/exam/' + n + '">Take the exam</a><a class="btn" href="#/practice/' + n + '">Practice first</a></div>');
+    if (!st.passed) return line("Take the Week " + n + " exam", bank(n).examSize + " questions drawn at random. You need every one right to unlock Week " + (n + 1) + ".", '<a class="btn pri" href="#/exam/' + n + '">Take the exam</a><a class="btn" href="#/practice/' + n + '">Practice first</a>');
     if (!gatesDone(n)) return line("Finish the journal requirements", "This week also needs logged trades. See the week page.", '<a class="btn pri" href="#/week/' + n + '">Week page</a>');
     return line("Week " + n + " complete", "Everything is done.", "");
   }
@@ -151,46 +189,52 @@
   routes.week = function (p) {
     var n = parseInt(p[0], 10) || 1, w = week(n); if (!w) return go("#/");
     var st = W(n), un = unlocked(n), b = bank(n);
-    var h = '<p class="kicker">Week ' + n + " · " + esc(TA.PHASES[w.phase - 1].name) + "</p><h1>" + esc(w.title) + '</h1><p class="lede">' + esc(w.topic) + ".</p>";
-    if (!un) h += '<div class="card warn"><b>Locked.</b> <span class="muted">Finish Week ' + (n - 1) + " first. Its exam needs 100%.</span></div>";
-    h += '<div class="card"><h3 style="margin-top:0">By the end of this week you can</h3><ul>' + w.objectives.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") + "</ul></div>";
+    var h = '<a class="back" href="#/">All weeks</a>' + head("Week " + n + ", " + esc(TA.PHASES[w.phase - 1].name), esc(w.title), esc(w.topic) + ".");
+    if (!un) h += '<div class="notice warn"><span class="ic">' + LOCK + "</span><p><b>Locked.</b> Finish Week " + (n - 1) + " first. Its exam needs 100%.</p></div>";
+    h += '<section class="objectives"><h2>By the end of this week you can</h2><ul>' + w.objectives.map(function (o) { return "<li>" + esc(o) + "</li>"; }).join("") + "</ul></section>";
     if (!w.lesson || !b) {
-      h += '<div class="card"><h3 style="margin-top:0">Not built yet</h3><p class="muted">Each week is written when you reach it, aimed at your mistakes so far. When Week ' + (n - 1) + ' is done, tell Claude <b>Build Week ' + n + " of the trading academy</b>.</p></div>";
+      h += '<div class="notice"><p><b>Not built yet.</b> Each week is written when you reach it, aimed at your mistakes so far. When Week ' + (n - 1) + " is done, tell Claude <b>Build Week " + n + " of the trading academy</b>.</p></div>";
       app.innerHTML = h; return;
     }
     if (!un) { app.innerHTML = h; return; }
     // unlock checklist
     var reqs = [["Exam passed at 100%", st.passed], ["All tasks done", tasksDone(n)]];
     (w.gates || []).forEach(function (g) { var gs = gateStatus(g); reqs.push([g.label + " (" + gs.val + ")", gs.ok]); });
-    h += '<div class="card"><h3 style="margin-top:0">To unlock Week ' + (n + 1) + '</h3><ul class="checks">' + reqs.map(function (r) { return '<li><span class="tick' + (r[1] ? " on" : "") + '">' + (r[1] ? "✓" : "") + "</span>" + esc(r[0]) + "</li>"; }).join("") + "</ul></div>";
-    h += '<div class="card">';
-    // step 1
-    h += '<div class="step"><span class="sn">1</span><div><h3>Find your floor</h3><p class="muted small">Five questions before the lesson, so you know what is new. Not graded.</p>' +
-      (st.pretest ? '<p class="small">Done. You got ' + st.pretest.score + " of " + st.pretest.n + '.</p><a class="btn sm" href="#/pretest/' + n + '">Do it again</a>' : '<a class="btn pri" href="#/pretest/' + n + '">Start</a>') + "</div></div>";
-    // step 2
-    h += '<div class="step"><span class="sn">2</span><div><h3>The lesson</h3><p class="muted small">The full story, with every interactive. Answer every green box.</p><a class="btn pri" href="' + w.lesson + '">Open the Week ' + n + " lesson</a></div></div>";
-    // step 3
-    h += '<div class="step"><span class="sn">3</span><div><h3>Practice</h3><p class="muted small">Unlimited questions from the exam bank, with explanations. Questions you miss come back more often. Calculation questions get new numbers every time.</p><a class="btn" href="#/practice/' + n + '">Practice</a></div></div>';
-    // step 4 tasks
-    h += '<div class="step"><span class="sn">4</span><div><h3>Tasks</h3><div class="tasks">';
+    var met = reqs.filter(function (r) { return r[1]; }).length;
+    h += '<section class="unlock"><h2>To unlock Week ' + (n + 1) + '</h2><p class="count">' + met + " of " + reqs.length + ' met</p><ul class="checks">' + reqs.map(function (r) { return '<li class="' + (r[1] ? "ok" : "") + '"><span class="tick">' + (r[1] ? CHECK : "") + "</span>" + esc(r[0]) + "</li>"; }).join("") + "</ul></section>";
+
+    var S5 = steps(n), last = st.exams[st.exams.length - 1];
+    function stepCls(i) { var s = S5[i]; return s.done ? "done" : s.now ? "now" : s.open ? "open" : "todo"; }
+    function stepHead(i, title, sub) {
+      return '<li class="' + stepCls(i) + '"><span class="node" aria-hidden="true">' + (S5[i].done ? CHECK : "") + '</span><div class="sbody"><h3>' + title + (S5[i].now ? '<span class="here">You are here</span>' : "") + "</h3>" + (sub ? '<p class="ssub">' + sub + "</p>" : "");
+    }
+    h += '<section class="weekpath"><h2>This week, step by step</h2><ol class="vrail">';
+    // 1 floor
+    h += stepHead(0, "Find your floor", "Five questions before the lesson, so you know what is new. Not graded.") +
+      (st.pretest ? '<p class="sdone">Done. You got ' + st.pretest.score + " of " + st.pretest.n + '.</p><a class="btn sm" href="#/pretest/' + n + '">Do it again</a>' : '<a class="btn pri" href="#/pretest/' + n + '">Start</a>') + "</div></li>";
+    // 2 lesson
+    h += stepHead(1, "Read the lesson", "The full story, with every interactive. Answer every green box, then tick the first task below.") + '<a class="btn' + (S5[1].now ? " pri" : "") + '" href="' + w.lesson + '">Open the Week ' + n + " lesson</a></div></li>";
+    // 3 practice
+    h += stepHead(2, "Practice, any time", "Unlimited questions from the exam bank, with explanations. Questions you miss come back more often, and calculation questions get new numbers every time.") + '<div class="row"><a class="btn" href="#/practice/' + n + '">Practice</a><span class="meta">' + S5[2].note + "</span></div></div></li>";
+    // 4 tasks
+    var td = w.tasks.filter(function (t) { return st.tasks[t.id]; }).length;
+    h += stepHead(3, "Tasks", td + " of " + w.tasks.length + " done.") + '<div class="tasks">';
     w.tasks.forEach(function (t) {
-      h += '<div class="task"><input type="checkbox" data-task="' + t.id + '"' + (st.tasks[t.id] ? " checked" : "") + ' aria-label="Done"><div class="tt">' + esc(t.text) +
-        (t.link ? ' <a href="' + t.link + '"' + (/^https?:/.test(t.link) ? ' target="_blank" rel="noopener"' : "") + ">" + esc(t.linkText || "Open") + "</a>" : "") +
-        (t.teach ? '<textarea id="teach" placeholder="Explain it here, in your own words.">' + esc(st.teach) + '</textarea><div class="row" style="margin-top:.5rem"><button class="btn sm" id="copyTeach" type="button">Copy it to paste to Claude</button><span class="muted small" id="wc"></span></div>' : "") +
-        "</div></div>";
+      h += '<label class="task' + (st.tasks[t.id] ? " checked" : "") + '"><input type="checkbox" data-task="' + t.id + '"' + (st.tasks[t.id] ? " checked" : "") + '><span class="box" aria-hidden="true">' + CHECK + '</span><span class="tt">' + esc(t.text) +
+        (t.link ? ' <a href="' + t.link + '"' + (/^https?:/.test(t.link) ? ' target="_blank" rel="noopener"' : "") + ">" + esc(t.linkText || "Open") + "</a>" : "") + "</span></label>" +
+        (t.teach ? '<div class="teach"><textarea id="teach" placeholder="Explain it here, in your own words.">' + esc(st.teach) + '</textarea><div class="row"><button class="btn sm" id="copyTeach" type="button">Copy it to paste to Claude</button><span class="meta" id="wc"></span></div></div>' : "");
     });
-    h += "</div></div></div>";
-    // step 5 exam
-    var last = st.exams[st.exams.length - 1];
-    h += '<div class="step"><span class="sn">5</span><div><h3>The exam</h3><p class="muted small">' + b.examSize + " questions, drawn at random from the bank, one from every topic. 100% to pass. After a miss you clear those questions again with fresh numbers, then retake a brand new draw.</p>";
-    if (st.passed) h += '<p><span class="pill done">Passed</span></p>';
+    h += "</div></div></li>";
+    // 5 exam
+    h += stepHead(4, "The exam", b.examSize + " questions, drawn at random from the bank, one from every topic. 100% to pass. After a miss you clear those questions again with fresh numbers, then retake a brand new draw.");
+    if (st.passed) h += '<p class="sdone">Passed.</p>';
     else if (st.review && st.review.length) h += '<a class="btn pri" href="#/review/' + n + '">Clear your ' + st.review.length + " miss" + (st.review.length > 1 ? "es" : "") + " first</a>";
-    else h += '<a class="btn pri" href="#/exam/' + n + '">' + (st.exams.length ? "Retake the exam" : "Take the exam") + "</a>";
-    if (st.exams.length) h += '<p class="small muted" style="margin-top:.8rem">Attempts. ' + st.exams.map(function (e) { return e.score + "/" + e.n; }).join(", ") + (last ? ". Last on " + new Date(last.date).toLocaleDateString() : "") + ".</p>";
-    h += "</div></div></div>";
+    else h += '<a class="btn' + (S5[4].now ? " pri" : "") + '" href="#/exam/' + n + '">' + (st.exams.length ? "Retake the exam" : "Take the exam") + "</a>";
+    if (st.exams.length) h += '<p class="meta attempts">Attempts so far ' + st.exams.map(function (e) { return '<span class="att' + (e.passed ? " ok" : "") + '">' + e.score + "/" + e.n + "</span>"; }).join("") + (last ? " Last on " + new Date(last.date).toLocaleDateString() + "." : "") + "</p>";
+    h += "</div></li></ol></section>";
     app.innerHTML = h;
     app.querySelectorAll("[data-task]").forEach(function (cb) {
-      cb.addEventListener("change", function () { st.tasks[cb.getAttribute("data-task")] = cb.checked; save(); });
+      cb.addEventListener("change", function () { st.tasks[cb.getAttribute("data-task")] = cb.checked; cb.closest(".task").classList.toggle("checked", cb.checked); save(); });
     });
     var ta = document.getElementById("teach");
     if (ta) {
@@ -205,22 +249,24 @@
 
   // ------------------------------------------------------------------ one at a time sessions (pretest, practice, review, diagnostic)
   function session(cfg) {
-    // cfg: {title, sub, next(): instance or null, onAnswer(inst, ok), onEnd(), total (optional), back}
     var count = 0, right = 0, inst = null;
     function show() {
       inst = cfg.next();
+      if (/debug/.test(location.search)) window.__cur = inst;
       if (!inst) { cfg.onEnd(right, count); return; }
       count++;
-      var h = '<p class="kicker">' + cfg.kicker + "</p><h1>" + cfg.title + "</h1>" + (cfg.sub ? '<p class="lede">' + cfg.sub + "</p>" : "");
-      if (cfg.total) h += '<div class="bar" aria-hidden="true"><i style="width:' + ((count - 1) / cfg.total * 100) + '%"></i></div>';
-      h += qHTML(inst, count - 1, { label: cfg.total ? "Question " + count + " of " + cfg.total : "Question " + count + (count > 1 ? " · " + right + " right so far" : ""), topic: cfg.topicName ? cfg.topicName(inst) : "" });
-      h += '<div class="row"><button class="btn pri" id="nextq" type="button" hidden>Next</button>' + (cfg.back ? '<a class="btn" href="' + cfg.back + '">Stop</a>' : "") + "</div>";
+      var h = '<div class="focus">' + (cfg.back ? '<a class="back" href="' + cfg.back + '">Stop</a>' : "") + head(cfg.kicker, cfg.title, cfg.sub || "");
+      if (cfg.total) h += '<div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="' + cfg.total + '" aria-valuenow="' + (count - 1) + '"><i style="width:' + ((count - 1) / cfg.total * 100) + '%"></i></div>';
+      else if (count > 1) h += '<p class="tally">' + right + " of " + (count - 1) + " right this session</p>";
+      h += qHTML(inst, count - 1, { label: cfg.total ? "Question " + count + " of " + cfg.total : "Question " + count, topic: cfg.topicName ? cfg.topicName(inst) : "" });
+      h += '<div class="row qnext"><button class="btn pri" id="nextq" type="button" hidden>Next question</button></div></div>';
       app.innerHTML = h;
       var q = app.querySelector(".q"), fbx = q.querySelector(".fbx"), nxt = document.getElementById("nextq");
       function done(ok, chosen) {
         if (ok) right++;
         cfg.onAnswer && cfg.onAnswer(inst, ok, chosen); save();
-        fbx.innerHTML = '<p class="fb"><b class="' + (ok ? "ok" : "no") + '">' + (ok ? "Right." : "Not quite.") + "</b> " + (ok || inst.type === "mcq" ? "" : "The answer is " + esc(rightText(inst)) + ". ") + inst.ex + "</p>";
+        q.classList.add(ok ? "is-right" : "is-wrong");
+        fbx.innerHTML = '<div class="fb ' + (ok ? "ok" : "no") + '"><p class="verdict">' + (ok ? "Right." : "Not quite.") + "</p><p>" + (ok || inst.type === "mcq" ? "" : "The answer is " + esc(rightText(inst)) + ". ") + inst.ex + "</p></div>";
         nxt.hidden = false; nxt.focus();
       }
       if (inst.type === "mcq") {
@@ -244,24 +290,28 @@
     }
     show();
   }
+  function endCard(where, title, big, body, btns) {
+    return '<div class="focus">' + head(where, title) + '<section class="result">' + (big ? '<p class="score">' + big + "</p>" : "") + "<p>" + body + '</p><div class="row">' + btns + "</div></section></div>";
+  }
 
   routes.pretest = function (p) {
     var n = parseInt(p[0], 10) || 1, b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
     var items = R.shuffle(b.items).slice(0, 5), i = 0;
-    session({ kicker: "Week " + n + " · Find your floor", title: "Five questions before the lesson", sub: "Answer from what you know now. Guessing is fine. This is not graded.", total: 5, back: "#/week/" + n,
+    session({ kicker: "Week " + n + ", find your floor", title: "Five questions before the lesson", sub: "Answer from what you know now. Guessing is fine. This is not graded.", total: 5, back: "#/week/" + n,
       topicName: function (inst) { return b.topics[inst.topic]; },
       next: function () { return i < items.length ? instance(items[i++]) : null; },
       onAnswer: function (inst, ok) { stat(inst.id, ok); },
       onEnd: function (right, count) {
         W(n).pretest = { score: right, n: count, date: Date.now() }; save();
-        app.innerHTML = '<p class="kicker">Week ' + n + '</p><h1>Floor found</h1><div class="card"><div class="score">' + right + "/" + count + '</div><p class="muted">' + (right >= 4 ? "You already have some of this. Read the lesson anyway, the exam asks for the mechanism, not the vocabulary." : "Good. That is what the lesson is for. Every one of those ideas is built from the ground up.") + '</p><div class="row"><a class="btn pri" href="' + week(n).lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a></div></div>';
+        app.innerHTML = endCard("Week " + n, "Floor found", right + " of " + count, right >= 4 ? "You already have some of this. Read the lesson anyway, the exam asks for the mechanism, not the vocabulary." : "Good. That is what the lesson is for. Every one of those ideas is built from the ground up.",
+          '<a class="btn pri" href="' + week(n).lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Week page</a>');
       } });
   };
 
   routes.practice = function (p) {
     var n = parseInt(p[0], 10) || 1, b = bank(n); if (!b || !unlocked(n)) return go("#/week/" + n);
     var lastId = null;
-    session({ kicker: "Week " + n + " · Practice", title: "Practice", sub: "As many as you want. Missed questions come back more often. Stop whenever you like.", back: "#/week/" + n,
+    session({ kicker: "Week " + n + ", practice", title: "Practice", sub: "As many as you want. Missed questions come back more often. Stop whenever you like.", back: "#/week/" + n,
       topicName: function (inst) { return b.topics[inst.topic]; },
       next: function () {
         var pool = b.items.filter(function (it) { return it.id !== lastId; });
@@ -278,8 +328,8 @@
     var n = parseInt(p[0], 10) || 1, b = bank(n), st = W(n);
     if (!b || !st.review || !st.review.length) return go("#/week/" + n);
     var queue = st.review.slice(), cleared = 0, startN = queue.length;
-    session({ kicker: "Week " + n + " · Clear your misses", title: "Get each one right", sub: "Each missed question comes back, with fresh numbers where it has numbers. A wrong answer sends it to the back of the line.", back: "#/week/" + n,
-      topicName: function (inst) { return b.topics[inst.topic] + " · " + cleared + " of " + startN + " cleared"; },
+    session({ kicker: "Week " + n + ", clear your misses", title: "Get each one right", sub: "Each missed question comes back, with fresh numbers where it has numbers. A wrong answer sends it to the back of the line.", back: "#/week/" + n,
+      topicName: function (inst) { return b.topics[inst.topic] + ", " + cleared + " of " + startN + " cleared"; },
       next: function () { if (!queue.length) return null; var it = itemById(b, queue[0]); return instance(it); },
       onAnswer: function (inst, ok) {
         stat(inst.id, ok);
@@ -289,7 +339,8 @@
       },
       onEnd: function () {
         st.review = null; save();
-        app.innerHTML = '<p class="kicker">Week ' + n + '</p><h1>Misses cleared</h1><div class="card"><p>The retake is unlocked. It will be a completely new draw from the bank.</p><div class="row"><a class="btn pri" href="#/exam/' + n + '">Retake the exam</a><a class="btn" href="#/practice/' + n + '">Practice more first</a></div></div>';
+        app.innerHTML = endCard("Week " + n, "Misses cleared", "", "The retake is unlocked. It will be a completely new draw from the bank.",
+          '<a class="btn pri" href="#/exam/' + n + '">Retake the exam</a><a class="btn" href="#/practice/' + n + '">Practice more first</a>');
       } });
   };
 
@@ -311,11 +362,11 @@
   };
   routes.diagresult = function () {
     if (!S.diag) return go("#/");
-    var h = '<p class="kicker">Entrance diagnostic</p><h1>' + S.diag.score + " of " + S.diag.n + '</h1><div class="card">';
-    S.diag.byPhase.forEach(function (ph) {
-      h += '<p style="margin:.6rem 0 .25rem"><b>' + esc(ph.name) + '</b> <span class="muted small">' + ph.right + " of " + ph.n + '</span></p><div class="bar"><i style="width:' + (ph.n ? ph.right / ph.n * 100 : 0) + '%"></i></div>';
+    var h = '<div class="focus">' + head("Entrance diagnostic", S.diag.score + " of " + S.diag.n + " right") + '<section class="result"><ul class="phasebars">';
+    S.diag.byPhase.forEach(function (ph, i) {
+      h += '<li><span class="pbn">Phase ' + (i + 1) + ". " + esc(ph.name) + '</span><span class="pbv">' + ph.right + " of " + ph.n + '</span><span class="meter"><i style="width:' + (ph.n ? ph.right / ph.n * 100 : 0) + '%"></i></span></li>';
     });
-    h += '<p class="muted" style="margin-top:1rem">Paste this score to Claude so the first lessons can start at the right depth. Nothing is skipped. Every week still needs its 100% exam.</p><div class="row"><a class="btn pri" href="#/">Back to the academy</a><a class="btn" href="#/diagnostic">Retake</a></div></div>';
+    h += '</ul><p>Paste this score to Claude so the first lessons can start at the right depth. Nothing is skipped. Every week still needs its 100% exam.</p><div class="row"><a class="btn pri" href="#/">Back to the academy</a><a class="btn" href="#/diagnostic">Retake</a></div></section></div>';
     app.innerHTML = h;
   };
 
@@ -337,21 +388,22 @@
     if (st.review && st.review.length) return go("#/review/" + n);
     var qs = compose(b), ans = new Array(qs.length);
     if (/debug/.test(location.search)) window.__exam = qs;
-    var h = '<p class="kicker">Week ' + n + ' exam</p><h1>' + qs.length + ' questions. All of them right.</h1><p class="lede">No feedback until you submit. Work calculations on paper. Numeric answers accept commas.</p>';
-    h += qs.map(function (q, i) { return qHTML(q, i, { topic: b.topics[q.topic] }); }).join("");
-    h += '<div class="sticky-submit"><span class="muted small" id="answered">0 of ' + qs.length + ' answered</span><button class="btn pri" id="submit" type="button" disabled>Submit exam</button></div>';
+    var h = '<div class="focus exam"><a class="back" href="#/week/' + n + '">Leave without submitting</a>' + head("Week " + n + " exam", qs.length + " questions. Every one right.", "No feedback until you submit. Work calculations on paper. Numeric answers accept commas.");
+    h += qs.map(function (q, i) { return qHTML(q, i, { topic: b.topics[q.topic], label: "Question " + (i + 1) + " of " + qs.length }); }).join("");
+    h += '<div class="submitbar"><div class="sbin"><span class="meter"><i id="ansbar" style="width:0%"></i></span><span class="meta" id="answered">0 of ' + qs.length + ' answered</span><button class="btn pri" id="submit" type="button" disabled>Submit exam</button></div></div></div>';
     app.innerHTML = h;
     function upd() {
       var c = ans.filter(function (a) { return a != null && String(a).trim() !== ""; }).length;
       document.getElementById("answered").textContent = c + " of " + qs.length + " answered";
+      document.getElementById("ansbar").style.width = (c / qs.length * 100) + "%";
       document.getElementById("submit").disabled = c < qs.length;
     }
     app.querySelectorAll(".q").forEach(function (qe) {
       var i = +qe.getAttribute("data-i");
       qe.querySelectorAll(".opt").forEach(function (b2) {
-        b2.addEventListener("click", function () { qe.querySelectorAll(".opt").forEach(function (o) { o.classList.remove("sel"); }); b2.classList.add("sel"); ans[i] = +b2.getAttribute("data-k"); upd(); });
+        b2.addEventListener("click", function () { qe.querySelectorAll(".opt").forEach(function (o) { o.classList.remove("sel"); o.setAttribute("aria-pressed", "false"); }); b2.classList.add("sel"); b2.setAttribute("aria-pressed", "true"); qe.classList.add("answered"); ans[i] = +b2.getAttribute("data-k"); upd(); });
       });
-      var inp = qe.querySelector("input"); if (inp) inp.addEventListener("input", function () { ans[i] = inp.value; upd(); });
+      var inp = qe.querySelector("input"); if (inp) inp.addEventListener("input", function () { ans[i] = inp.value; qe.classList.toggle("answered", !!inp.value.trim()); upd(); });
     });
     document.getElementById("submit").addEventListener("click", function () {
       var res = qs.map(function (q, i) { var ok = grade(q, ans[i]); stat(q.id, ok); return ok; });
@@ -360,22 +412,22 @@
       st.exams.push({ date: Date.now(), score: score, n: qs.length, missed: missed, passed: passed });
       if (passed) { st.passed = true; st.review = null; } else st.review = missed;
       save();
-      var o = '<p class="kicker">Week ' + n + ' exam</p><div class="card' + (passed ? " hero" : "") + '"><div class="score ' + (passed ? "pass" : "fail") + '">' + score + "/" + qs.length + "</div>";
+      var o = '<div class="focus">' + head("Week " + n + " exam", passed ? "Passed" : "Not yet") + '<section class="result ' + (passed ? "pass" : "fail") + '"><p class="score">' + score + "/" + qs.length + "</p>";
       if (passed) {
-        o += "<p><b>Passed.</b> " + (tasksDone(n) && gatesDone(n) ? "Week " + (n + 1) + " is unlocked." : "Finish the remaining tasks on the week page to unlock Week " + (n + 1) + ".") + '</p><div class="row"><a class="btn pri" href="#/week/' + n + '">Week page</a><a class="btn" href="#/">Academy</a></div>';
+        o += "<p>" + (tasksDone(n) && gatesDone(n) ? "Week " + (n + 1) + " is unlocked." : "Finish the remaining tasks on the week page to unlock Week " + (n + 1) + ".") + '</p><div class="row"><a class="btn pri" href="#/week/' + n + '">Week page</a><a class="btn" href="#/">Academy</a></div>';
       } else {
-        o += "<p>Not yet. You missed " + missed.length + ". Read each explanation below. Then clear those questions again, with fresh numbers, before a new exam draw unlocks.</p><a class=\"btn pri\" href=\"#/review/" + n + '">Clear your misses</a>';
+        o += "<p>You missed " + missed.length + ". Read each explanation below. Then clear those questions again, with fresh numbers, before a new exam draw unlocks.</p><div class=\"row\"><a class=\"btn pri\" href=\"#/review/" + n + '">Clear your misses</a></div>';
       }
-      o += "</div>";
+      o += "</section>";
       if (!passed) {
-        o += "<h2>What you missed</h2>";
+        o += '<h2 class="missedh">What you missed</h2>';
         qs.forEach(function (q, i) {
           if (res[i]) return;
           var yours = q.type === "mcq" ? (ans[i] != null ? q.choices[ans[i]].t : "") : ans[i];
-          o += '<div class="q"><p class="qn"><span>Question ' + (i + 1) + "</span><span>" + esc(b.topics[q.topic]) + '</span></p><div class="qt">' + q.q + '</div><p class="small"><b style="color:var(--bad)">Your answer.</b> ' + esc(yours) + '</p><p class="small"><b style="color:var(--good)">Correct.</b> ' + esc(rightText(q)) + '</p><p class="fb">' + q.ex + "</p></div>";
+          o += '<article class="q missed"><header class="qn"><span class="qnum">Question ' + (i + 1) + '</span><span class="qtopic">' + esc(b.topics[q.topic]) + '</span></header><div class="qt">' + q.q + '</div><dl class="ans"><dt class="no">Your answer</dt><dd>' + esc(yours) + '</dd><dt class="ok">Correct answer</dt><dd>' + esc(rightText(q)) + '</dd></dl><div class="fb"><p>' + q.ex + "</p></div></article>";
         });
       }
-      app.innerHTML = o; window.scrollTo(0, 0);
+      app.innerHTML = o + "</div>"; window.scrollTo(0, 0);
     });
   };
 
@@ -412,14 +464,16 @@
     var rows = [
       ["All 12 weeks complete", weeksDone + " of 12", weeksDone >= G.minWeeks],
       ["At least " + G.minTrades + " sim trades on your written setup", (s.n || 0) + " of " + G.minTrades, (s.n || 0) >= G.minTrades],
-      ["Edge statistically real. t statistic of expectancy at least " + G.minT.toFixed(1), s.n > 1 ? s.t.toFixed(2) : "not enough trades", s.n > 1 && s.t >= G.minT],
+      ["Edge statistically real, with a t statistic of expectancy of at least " + G.minT.toFixed(1), s.n > 1 ? s.t.toFixed(2) : "not enough trades", s.n > 1 && s.t >= G.minT],
       ["Rules followed on at least " + pct(G.minAdherence) + " of sim trades", s.n ? pct(s.adh) : "no trades", s.n && s.adh >= G.minAdherence]
     ];
-    var all = rows.every(function (r) { return r[2]; });
-    var h = '<div class="card' + (all ? " hero" : "") + '"><p class="muted small" style="margin-top:0">Real money stays locked until every line is green. In the largest studies of day traders, under 1% were reliably profitable after costs. This gate is how you find out which side of that line you are on, cheaply.</p>';
-    rows.forEach(function (r) { h += '<div class="gate"><span class="tick' + (r[2] ? " on" : "") + '">' + (r[2] ? "✓" : "") + "</span><span>" + esc(r[0]) + '</span><span class="gv">' + esc(r[1]) + "</span></div>"; });
-    if (s.need) h += '<p class="small muted" style="margin-bottom:0">At your current sim expectancy of ' + f2(s.mean) + "R per trade, roughly " + s.need + " trades are needed before luck stops being a good explanation.</p>";
-    return h + "</div>";
+    var met = rows.filter(function (r) { return r[2]; }).length, all = met === rows.length;
+    var h = '<section class="vault' + (all ? " open" : "") + '"><div class="vhead"><span class="vlock">' + LOCK + '</span><div><h2>Real money</h2><p class="vstate">' + (all ? "Unlocked. Start with one micro contract." : "Locked. " + met + " of " + rows.length + " conditions met.") + "</p></div></div>";
+    h += '<p class="vnote">In the largest studies of day traders, under 1% were reliably profitable after costs. This gate is how you find out which side of that line you are on, cheaply.</p><ul class="vrows">';
+    rows.forEach(function (r) { h += '<li class="' + (r[2] ? "ok" : "") + '"><span class="tick">' + (r[2] ? CHECK : "") + '</span><span class="vl">' + esc(r[0]) + '</span><span class="vv">' + esc(r[1]) + "</span></li>"; });
+    h += "</ul>";
+    if (s.need) h += '<p class="vnote">At your current sim expectancy of ' + f2(s.mean) + "R per trade, roughly " + s.need + " trades are needed before luck stops being a good explanation.</p>";
+    return h + "</section>";
   }
 
   // ------------------------------------------------------------------ journal page
@@ -429,51 +483,63 @@
     var todays = all.filter(function (t) { return t.date === td && (t.mode === "sim" || t.mode === "live"); });
     var todayR = todays.map(rOf).filter(function (r) { return !isNaN(r); }).reduce(function (a, c) { return a + c; }, 0);
     var stop = todays.length >= set.maxTrades || todayR <= -set.dailyLossR;
-    var h = '<p class="kicker">Journal</p><h1>Every trade, measured</h1><p class="lede">Log backtest, replay, sim and live trades separately. Results are in R, the amount you risked, so a trade risking 2 points that makes 4 is +2R.</p>';
-    h += '<div class="card' + (stop ? " stop" : "") + '"><b>' + (stop ? "Done for today. Your rules say stop." : "Today") + '</b> <span class="muted">' + todays.length + " of " + set.maxTrades + " sim and live trades used. Net " + f2(todayR) + "R against a daily loss limit of −" + set.dailyLossR + "R.</span></div>";
+    var h = head("Journal", "Every trade, measured", "Log backtest, replay, sim and live trades separately. Results are in R, the amount you risked, so a trade risking 2 points that makes 4 is +2R.");
+    // today's desk strip
+    var segs = ""; for (var i = 0; i < set.maxTrades; i++) segs += '<i class="' + (i < todays.length ? "used" : "") + '"></i>';
+    var lossFrac = Math.min(1, Math.max(0, -todayR) / set.dailyLossR);
+    h += '<section class="desk' + (stop ? " stop" : "") + '"><div class="dhead"><h2>' + (stop ? "Done for today. Your rules say stop." : "Today") + '</h2><p class="meta">' + todays.length + " of " + set.maxTrades + " sim and live trades used. Net " + f2(todayR) + "R against a daily loss limit of −" + set.dailyLossR + 'R.</p></div><div class="dgrid">' +
+      '<div class="dcell"><span class="dk">Trades used</span><span class="dv">' + todays.length + "<small>/" + set.maxTrades + '</small></span><span class="segs">' + segs + "</span></div>" +
+      '<div class="dcell"><span class="dk">Net today</span><span class="dv ' + (todayR > 0 ? "pos" : todayR < 0 ? "neg" : "") + '">' + f2(todayR) + '<small>R</small></span><span class="lossbar" title="Share of the daily loss limit used"><i style="width:' + (lossFrac * 100) + '%"></i></span><span class="dfoot">' + Math.round(lossFrac * 100) + "% of the −" + set.dailyLossR + "R limit used</span></div></div></section>";
     // form
-    h += '<div class="card"><h3 style="margin-top:0">Log a trade</h3><div class="grid">' +
+    h += '<section class="logform"><h2>Log a trade</h2><div class="grid">' +
       fld("Date", '<input type="date" id="j_date" value="' + td + '">') +
       fld("Mode", sel("j_mode", [["sim", "Sim"], ["replay", "Replay"], ["backtest", "Backtest"], ["live", "Live"]])) +
       fld("Instrument", sel("j_inst", [["MES", "MES"], ["MNQ", "MNQ"], ["ES", "ES"], ["NQ", "NQ"], ["other", "Other"]])) +
       fld("Direction", sel("j_dir", [["long", "Long"], ["short", "Short"]])) +
       fld("Entry", '<input id="j_entry" inputmode="decimal">') + fld("Stop", '<input id="j_stop" inputmode="decimal">') + fld("Exit", '<input id="j_exit" inputmode="decimal">') +
       fld("Contracts", '<input id="j_qty" inputmode="numeric" value="1">') +
-      fld("Setup name", '<input id="j_setup" list="setups" placeholder="e.g. NY open sweep">') +
-      fld("Rules followed?", sel("j_fol", [["1", "Yes, every rule"], ["0", "No, I broke one"]])) +
-      fld("R override (optional)", '<input id="j_rov" inputmode="decimal" placeholder="for backtest imports">') +
-      '<div class="field wide"><label>Notes</label><input id="j_notes" placeholder="What did you see, what did you feel"></div></div>' +
+      fld("Setup name", '<input id="j_setup" list="setups" placeholder="e.g. NY open sweep">', "wide2") +
+      fld("Rules followed?", sel("j_fol", [["1", "Yes, every rule"], ["0", "No, I broke one"]]), "wide2") +
+      fld("R override (optional)", '<input id="j_rov" inputmode="decimal" placeholder="for backtest imports">', "wide2") +
+      '<div class="field wide2"><label for="j_notes">Notes</label><input id="j_notes" placeholder="What did you see, what did you feel"></div></div>' +
       '<datalist id="setups">' + uniq(all.map(function (t) { return t.setup; })).map(function (s) { return '<option value="' + esc(s) + '">'; }).join("") + "</datalist>" +
-      '<div class="row" style="margin-top:.8rem"><button class="btn pri" id="j_add" type="button">Add trade</button><span class="muted small" id="j_prev"></span></div></div>';
+      '<div class="row formfoot"><button class="btn pri" id="j_add" type="button">Add trade</button><span class="rprev" id="j_prev"></span></div></section>';
     // stats
     var modes = [["all", "All"], ["backtest", "Backtest"], ["replay", "Replay"], ["sim", "Sim"], ["live", "Live"]];
     var fl = jFilter === "all" ? all : all.filter(function (t) { return t.mode === jFilter; }), s = stats(fl);
-    h += '<h2>Statistics</h2><div class="seg" id="j_seg">' + modes.map(function (m) { return '<button type="button" data-m="' + m[0] + '" class="' + (jFilter === m[0] ? "on" : "") + '">' + m[1] + "</button>"; }).join("") + "</div>";
-    if (!s.n) h += '<p class="muted">No trades here yet.</p>';
+    h += '<section class="statsec"><div class="sechead"><h2>Statistics</h2><div class="seg" id="j_seg" role="group" aria-label="Filter by mode">' + modes.map(function (m) { return '<button type="button" data-m="' + m[0] + '" class="' + (jFilter === m[0] ? "on" : "") + '" aria-pressed="' + (jFilter === m[0]) + '">' + m[1] + "</button>"; }).join("") + "</div></div>";
+    if (!s.n) h += '<p class="empty">No trades here yet. Log one above and the numbers appear here.</p>';
     else {
+      var sc = function (k, v, sign, big) { return '<div class="stat' + (big ? " big" : "") + '"><div class="k">' + k + '</div><div class="v' + (sign != null ? (sign > 0 ? " pos" : sign < 0 ? " neg" : "") : "") + '">' + v + "</div></div>"; };
+      h += '<div class="stats primary">' + sc("Expectancy per trade", f2(s.mean) + "R", s.mean, 1) + sc("t statistic", s.n > 1 ? s.t.toFixed(2) : "n/a", null, 1) + sc("Trades", s.n, null, 1) + "</div>";
+      h += '<p class="jverdict">' + verdict(s) + "</p>";
       h += '<div class="stats">' + [
-        ["Trades", s.n], ["Win rate", pct(s.win)], ["Expectancy", f2(s.mean) + "R", s.mean], ["Total", f2(s.total) + "R", s.total],
-        ["Avg win", f2(s.avgW) + "R"], ["Avg loss", f2(s.avgL) + "R"], ["Profit factor", s.pf === Infinity ? "∞" : s.pf.toFixed(2)], ["Max drawdown", "−" + s.dd.toFixed(2) + "R"],
-        ["Worst losing streak", s.streak], ["t statistic", s.n > 1 ? s.t.toFixed(2) : "n/a"], ["95% range of expectancy", s.n > 1 ? f2(s.lo) + " to " + f2(s.hi) : "n/a"], ["Rules followed", pct(s.adh)]
-      ].map(function (x) { return '<div class="stat"><div class="k">' + x[0] + '</div><div class="v' + (x[2] != null ? (x[2] > 0 ? " pos" : x[2] < 0 ? " neg" : "") : "") + '">' + x[1] + "</div></div>"; }).join("") + "</div>";
-      h += '<p class="small muted">' + verdict(s) + "</p>";
+        sc("Win rate", pct(s.win)), sc("Total", f2(s.total) + "R", s.total), sc("Avg win", f2(s.avgW) + "R"), sc("Avg loss", f2(s.avgL) + "R"),
+        sc("Profit factor", s.pf === Infinity ? "∞" : s.pf.toFixed(2)), sc("Max drawdown", "−" + s.dd.toFixed(2) + "R"), sc("Worst losing streak", s.streak), sc("Rules followed", pct(s.adh)),
+        sc("95% range of expectancy", s.n > 1 ? f2(s.lo) + " to " + f2(s.hi) : "n/a")
+      ].join("") + "</div>";
       h += curve(fl);
       var bySetup = {}; fl.forEach(function (t) { (bySetup[t.setup || "unnamed"] = bySetup[t.setup || "unnamed"] || []).push(t); });
-      h += '<h3>By setup</h3><div class="scroll"><table class="tbl"><tr><th>Setup</th><th>Trades</th><th>Win rate</th><th>Expectancy</th><th>t</th></tr>' +
-        Object.keys(bySetup).map(function (k) { var ss = stats(bySetup[k]); return "<tr><td>" + esc(k) + "</td><td>" + ss.n + "</td><td>" + (ss.n ? pct(ss.win) : "") + '</td><td class="r">' + (ss.n ? f2(ss.mean) + "R" : "") + "</td><td>" + (ss.n > 1 ? ss.t.toFixed(2) : "") + "</td></tr>"; }).join("") + "</table></div>";
+      h += '<h3>By setup</h3><div class="scroll"><table class="tbl"><thead><tr><th>Setup</th><th class="n">Trades</th><th class="n">Win rate</th><th class="n">Expectancy</th><th class="n">t</th></tr></thead><tbody>' +
+        Object.keys(bySetup).map(function (k) { var ss = stats(bySetup[k]); return "<tr><td>" + esc(k) + '</td><td class="n">' + ss.n + '</td><td class="n">' + (ss.n ? pct(ss.win) : "") + '</td><td class="n r ' + (ss.mean > 0 ? "pos" : ss.mean < 0 ? "neg" : "") + '">' + (ss.n ? f2(ss.mean) + "R" : "") + '</td><td class="n">' + (ss.n > 1 ? ss.t.toFixed(2) : "") + "</td></tr>"; }).join("") + "</tbody></table></div>";
     }
+    h += "</section>";
     // table
-    h += '<h2>Trades</h2>';
+    h += '<section class="tradesec"><h2>Trades</h2>';
     if (all.length) {
-      h += '<div class="scroll"><table class="tbl"><tr><th>Date</th><th>Mode</th><th>Inst</th><th>Setup</th><th>Dir</th><th>R</th><th>Rules</th><th>Notes</th><th></th></tr>' +
-        all.slice().reverse().map(function (t) { var r = rOf(t); return "<tr><td>" + esc(t.date) + "</td><td>" + esc(t.mode) + "</td><td>" + esc(t.inst) + "</td><td>" + esc(t.setup) + "</td><td>" + esc(t.dir) + '</td><td class="r" style="color:' + (r > 0 ? "var(--good)" : r < 0 ? "var(--bad)" : "inherit") + '">' + (isNaN(r) ? "?" : f2(r)) + "</td><td>" + (t.followed ? "yes" : "no") + "</td><td>" + esc(t.notes || "") + '</td><td><button class="btn sm" type="button" data-del="' + t.id + '" aria-label="Delete trade">Delete</button></td></tr>'; }).join("") + "</table></div>";
-    } else h += '<p class="muted">Nothing logged yet.</p>';
-    h += '<div class="row" style="margin-top:1rem"><button class="btn sm" id="j_csv" type="button">Export CSV</button><label class="btn sm">Import CSV<input type="file" id="j_imp" accept=".csv,text/csv" hidden></label></div><p class="small muted">CSV columns. date, mode, inst, setup, dir, entry, stop, exit, qty, r, followed, notes. Use the r column for backtest results already measured in R.</p>';
+      h += '<div class="scroll"><table class="tbl"><thead><tr><th>Date</th><th>Mode</th><th>Inst</th><th>Setup</th><th>Dir</th><th class="n">R</th><th>Rules</th><th>Notes</th><th></th></tr></thead><tbody>' +
+        all.slice().reverse().map(function (t) { var r = rOf(t); return "<tr><td>" + esc(t.date) + '</td><td><span class="mode m-' + esc(t.mode) + '">' + esc(t.mode) + "</span></td><td>" + esc(t.inst) + "</td><td>" + esc(t.setup) + "</td><td>" + esc(t.dir) + '</td><td class="n r ' + (r > 0 ? "pos" : r < 0 ? "neg" : "") + '">' + (isNaN(r) ? "?" : f2(r)) + "</td><td>" + (t.followed ? "yes" : '<span class="neg">no</span>') + '</td><td class="notes">' + esc(t.notes || "") + '</td><td><button class="btn sm" type="button" data-del="' + t.id + '" aria-label="Delete trade">Delete</button></td></tr>'; }).join("") + "</tbody></table></div>";
+    } else h += '<p class="empty">Nothing logged yet.</p>';
+    h += '<div class="row csvrow"><button class="btn sm" id="j_csv" type="button">Export CSV</button><label class="btn sm">Import CSV<input type="file" id="j_imp" accept=".csv,text/csv" hidden></label></div><p class="meta">CSV columns are date, mode, inst, setup, dir, entry, stop, exit, qty, r, followed and notes. Use the r column for backtest results already measured in R.</p></section>';
     app.innerHTML = h;
 
     function v(id) { return document.getElementById(id).value.trim(); }
     function readForm() { return { date: v("j_date"), mode: v("j_mode"), inst: v("j_inst"), dir: v("j_dir"), entry: v("j_entry"), stop: v("j_stop"), exit: v("j_exit"), qty: v("j_qty"), setup: v("j_setup"), followed: v("j_fol") === "1", rOverride: v("j_rov"), notes: v("j_notes") }; }
-    function prev() { var r = rOf(readForm()); document.getElementById("j_prev").textContent = isNaN(r) ? "Enter entry, stop and exit to see R." : "This trade is " + f2(r) + "R."; }
+    function prev() {
+      var r = rOf(readForm()), el = document.getElementById("j_prev");
+      el.className = "rprev" + (isNaN(r) ? "" : r > 0 ? " pos" : r < 0 ? " neg" : "");
+      el.textContent = isNaN(r) ? "Enter entry, stop and exit to see R." : "This trade is " + f2(r) + "R.";
+    }
     ["j_entry", "j_stop", "j_exit", "j_rov", "j_dir"].forEach(function (id) { document.getElementById(id).addEventListener("input", prev); document.getElementById(id).addEventListener("change", prev); });
     prev();
     document.getElementById("j_add").addEventListener("click", function () {
@@ -512,11 +578,15 @@
       });
     });
   };
-  function fld(l, inner) { return '<div class="field"><label>' + l + "</label>" + inner + "</div>"; }
+  var fid = 0;
+  function fld(l, inner, cls) {
+    var m = inner.match(/id="([^"]+)"/), id = m ? m[1] : "f" + (fid++);
+    return '<div class="field' + (cls ? " " + cls : "") + '"><label for="' + id + '">' + l + "</label>" + inner + "</div>";
+  }
   function sel(id, opts) { return '<select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + "</option>"; }).join("") + "</select>"; }
   function uniq(a) { var o = []; a.forEach(function (x) { if (x && o.indexOf(x) < 0) o.push(x); }); return o; }
   function verdict(s) {
-    if (s.n < 30) return "Fewer than 30 trades. Any number above is mostly noise. Keep logging.";
+    if (s.n < 30) return "Fewer than 30 trades. Any number here is mostly noise. Keep logging.";
     if (s.mean <= 0) return "Expectancy is zero or negative. As it stands this loses money, and more trades will not fix that by themselves.";
     if (s.t < 2) return "Positive so far, but a t statistic below 2 means luck explains it easily. Roughly " + s.need + " trades at this edge would settle it.";
     return "Positive expectancy with t above 2. That is evidence of an edge in this sample. It still has to hold on new data, in real time, after costs.";
@@ -524,15 +594,17 @@
   function curve(trs) {
     var rs = trs.map(rOf).filter(function (r) { return !isNaN(r); }); if (rs.length < 2) return "";
     var pts = [0], c = 0; rs.forEach(function (r) { c += r; pts.push(c); });
-    var Wd = 640, Ht = 220, pad = 34, mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts); if (mx === mn) { mx += 1; mn -= 1; }
-    var X = function (i) { return pad + i / (pts.length - 1) * (Wd - pad - 10); }, Y = function (v) { return 10 + (mx - v) / (mx - mn) * (Ht - 40); };
+    var Wd = 640, Ht = 220, pad = 40, mn = Math.min.apply(null, pts), mx = Math.max.apply(null, pts); if (mx === mn) { mx += 1; mn -= 1; }
+    var X = function (i) { return pad + i / (pts.length - 1) * (Wd - pad - 12); }, Y = function (v) { return 14 + (mx - v) / (mx - mn) * (Ht - 46); };
     var d = pts.map(function (v, i) { return (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(v).toFixed(1); }).join(" ");
-    return '<h3>Equity curve, in R</h3><svg class="eq" viewBox="0 0 ' + Wd + " " + Ht + '" role="img" aria-label="Cumulative R over trades">' +
-      '<line class="ax" x1="' + pad + '" y1="' + (Ht - 30) + '" x2="' + (Wd - 10) + '" y2="' + (Ht - 30) + '"/>' +
-      '<line class="z" x1="' + pad + '" y1="' + Y(0) + '" x2="' + (Wd - 10) + '" y2="' + Y(0) + '"/>' +
-      '<path class="ln" d="' + d + '"/>' +
-      '<text x="' + (pad - 6) + '" y="' + (Y(mx) + 4) + '" text-anchor="end">' + mx.toFixed(1) + '</text><text x="' + (pad - 6) + '" y="' + (Y(mn) + 4) + '" text-anchor="end">' + mn.toFixed(1) + '</text>' +
-      '<text x="' + X(pts.length - 1) + '" y="' + (Ht - 12) + '" text-anchor="end">trade ' + (pts.length - 1) + "</text></svg>";
+    var area = d + " L" + X(pts.length - 1).toFixed(1) + "," + Y(0).toFixed(1) + " L" + X(0).toFixed(1) + "," + Y(0).toFixed(1) + " Z";
+    var dots = pts.slice(1).map(function (v, i) { return '<circle cx="' + X(i + 1).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3" class="' + (rs[i] > 0 ? "up" : rs[i] < 0 ? "dn" : "") + '"/>'; }).join("");
+    return '<h3>Equity curve, in R</h3><figure class="eqf"><svg class="eq" viewBox="0 0 ' + Wd + " " + Ht + '" role="img" aria-label="Cumulative R over trades">' +
+      '<line class="ax" x1="' + pad + '" y1="' + (Ht - 30) + '" x2="' + (Wd - 12) + '" y2="' + (Ht - 30) + '"/>' +
+      '<line class="z" x1="' + pad + '" y1="' + Y(0) + '" x2="' + (Wd - 12) + '" y2="' + Y(0) + '"/>' +
+      '<path class="area" d="' + area + '"/><path class="ln" d="' + d + '"/>' + (pts.length <= 80 ? dots : "") +
+      '<text x="' + (pad - 8) + '" y="' + (Y(mx) + 4) + '" text-anchor="end">' + mx.toFixed(1) + '</text><text x="' + (pad - 8) + '" y="' + (Y(mn) + 4) + '" text-anchor="end">' + mn.toFixed(1) + '</text><text x="' + (pad - 8) + '" y="' + (Y(0) + 4) + '" text-anchor="end">0</text>' +
+      '<text x="' + X(pts.length - 1) + '" y="' + (Ht - 10) + '" text-anchor="end">trade ' + (pts.length - 1) + "</text></svg><figcaption>Each dot is one trade. The dashed line is where you started.</figcaption></figure>";
   }
   function parseCSV(txt) {
     var rows = [], row = [], f = "", q = false;
@@ -552,17 +624,17 @@
   // ------------------------------------------------------------------ settings
   routes.settings = function () {
     var set = S.settings;
-    var h = '<p class="kicker">Settings</p><h1>Rules and backups</h1>';
-    h += '<div class="card"><h3 style="margin-top:0">Daily trading limits</h3><p class="muted small">Set these before you trade, never during. The journal tells you to stop when you hit either one.</p><div class="grid">' +
+    var h = head("Settings", "Rules and backups");
+    h += '<section class="panel"><h2>Daily trading limits</h2><p class="meta">Set these before you trade, never during. The journal tells you to stop when you hit either one.</p><div class="grid">' +
       fld("Daily loss limit, in R", '<input id="s_loss" inputmode="decimal" value="' + set.dailyLossR + '">') + fld("Max trades per day", '<input id="s_max" inputmode="numeric" value="' + set.maxTrades + '">') +
-      '</div><div class="row" style="margin-top:.8rem"><button class="btn pri" id="s_save" type="button">Save limits</button></div></div>';
-    h += '<div class="card"><h3 style="margin-top:0">Backup</h3><p class="muted small">Everything lives in this browser. Export a file now and then, and import it on any other device.</p><div class="row"><button class="btn" id="s_exp" type="button">Export backup</button><label class="btn">Import backup<input type="file" id="s_imp" accept=".json,application/json" hidden></label></div></div>';
-    h += '<div class="card warn"><h3 style="margin-top:0">Start over</h3><p class="muted small">Erases all progress, exams and journal trades in this browser. Export first.</p><button class="btn danger" id="s_reset" type="button">Erase everything</button></div>';
+      '</div><div class="row"><button class="btn pri" id="s_save" type="button">Save limits</button></div></section>';
+    h += '<section class="panel"><h2>Backup</h2><p class="meta">Everything lives in this browser. Export a file now and then, and import it on any other device.</p><div class="row"><button class="btn" id="s_exp" type="button">Export backup</button><label class="btn">Import backup<input type="file" id="s_imp" accept=".json,application/json" hidden></label></div></section>';
+    h += '<section class="panel danger"><h2>Start over</h2><p class="meta">Erases all progress, exams and journal trades in this browser. Export first.</p><button class="btn danger" id="s_reset" type="button">Erase everything</button></section>';
     app.innerHTML = h;
     document.getElementById("s_save").addEventListener("click", function () {
       var l = parseFloat(document.getElementById("s_loss").value), m = parseInt(document.getElementById("s_max").value, 10);
       if (!(l > 0) || !(m > 0)) { toast("Both limits must be positive."); return; }
-      set.dailyLossR = l; set.maxTrades = m; save(); toast("Saved.");
+      set.dailyLossR = l; set.maxTrades = m; save(); toast("Limits saved.");
     });
     document.getElementById("s_exp").addEventListener("click", function () { download("trading-academy-backup-" + today() + ".json", JSON.stringify(S, null, 1), "application/json"); });
     document.getElementById("s_imp").addEventListener("change", function (e) {

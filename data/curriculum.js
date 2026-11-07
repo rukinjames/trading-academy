@@ -22,7 +22,7 @@ TA.WEEKS = [
     ],
     tasks: [
       { id: "read", text: "Read the whole Week 1 lesson and answer every green box in it.", link: "lessons/week01.html", linkText: "Open the lesson" },
-      { id: "teach", text: "Teach it back. In the box below, explain how a share of a forty dollar company traded for one cent to someone who has never heard of a bid, an ask, a spread, a limit order or a stop. Define each word as you use it. Then paste it to Claude to be graded.", teach: true },
+      { id: "teach", text: "Teach it back. In the box below, explain how a forty dollar share traded for one cent to someone who has never heard of a bid, an ask, a spread, a limit order or a stop. Define each word as you use it. Then paste it to Claude to be graded.", teach: true },
       { id: "tv", text: "Open a free TradingView account and load MES1! (Micro E-mini S&P 500) on the 1 minute chart. Pick one candle and write down its open, high, low and close from the data window. Check that the candle's shape matches those four numbers." , link: "https://www.tradingview.com/chart/?symbol=CME_MINI%3AMES1%21", linkText: "Open MES1! on TradingView" },
       { id: "open", text: "Watch the first 15 minutes after the 9∶30 am New York open (8∶30 am in St. Louis) on a 1 minute MES chart, live or with replay if your plan allows it. Write down three things you notice about candle size and volume compared with the middle of the day." },
       { id: "report", text: "Read pages 1 to 8 of the official SEC and CFTC report on May 6, 2010. You will now understand almost every sentence.", link: "https://www.sec.gov/files/marketevents-report.pdf", linkText: "Open the report (PDF)" }
