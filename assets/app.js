@@ -103,6 +103,8 @@
     o.journal = Object.keys(j).map(function (k) { return j[k]; });
     o.qstats = {};
     [a.qstats || {}, b.qstats || {}].forEach(function (q) { Object.keys(q).forEach(function (k) { var c = o.qstats[k] || { seen: 0, miss: 0 }; c.seen = Math.max(c.seen, q[k].seen || 0); c.miss = Math.max(c.miss, q[k].miss || 0); o.qstats[k] = c; }); });
+    o.lp = {};
+    [a.lp || {}, b.lp || {}].forEach(function (q) { Object.keys(q).forEach(function (k) { if (!o.lp[k] || (q[k].done || 0) > (o.lp[k].done || 0)) o.lp[k] = { done: q[k].done || 0, total: q[k].total || 0 }; }); });
     o.diag = (a.diag && b.diag) ? (a.diag.date >= b.diag.date ? a.diag : b.diag) : (a.diag || b.diag || null);
     o.created = Math.min(a.created || Date.now(), b.created || Date.now());
     o.updated = Math.max(a.updated || 0, b.updated || 0);
@@ -242,6 +244,21 @@
     return R.pick(pool);
   }
 
+  // Sitting progress written by the lesson pages (localStorage ta.lessonprogress), copied into S.lp so it syncs.
+  function lessonKey(n) { var l = week(n) && week(n).lesson, m = l && /([^\/]+)\.html$/.exec(l); return m ? m[1] : null; }
+  function lessonProg(n) {
+    var k = lessonKey(n); if (!k) return null;
+    var loc = null; try { loc = (JSON.parse(localStorage.getItem("ta.lessonprogress") || "{}") || {})[k] || null; } catch (e) { loc = null; }
+    S.lp = S.lp || {};
+    if (loc && loc.total && (!S.lp[k] || (loc.done || 0) > (S.lp[k].done || 0))) { S.lp[k] = { done: loc.done || 0, total: loc.total }; save(); }
+    var c = S.lp[k]; return c && c.total ? c : null;
+  }
+  function progText(n) {
+    var p = lessonProg(n); if (!p) return "";
+    if (p.done >= p.total) return "All " + p.total + " sittings are done.";
+    return "You have finished " + p.done + " of " + p.total + " sittings.";
+  }
+
   // The five steps of a week, for display. Practice is open at any time and never blocks.
   function steps(n) {
     var w = week(n), st = W(n), b = bank(n);
@@ -370,7 +387,11 @@
       return line(lbl(n) + " is ready to be built", (unitNo(n) > 1 ? "You passed everything before it. " : "") + "Tell Claude <b>Build " + lbl(n) + "</b>. It will be written around what you got wrong so far.", '<a class="btn" href="#/week/' + n + '">See what it covers</a>');
     }
     if (!st.pretest) return line("Find your floor", "Five questions before you read anything, about 5 minutes. Wrong answers are expected and useful, they show where the lesson should start for you.", '<a class="btn pri" href="#/pretest/' + n + '">Start 5 questions</a>');
-    if (!st.tasks.read) return line("Read the lesson", "It is split into sittings of 30 to 45 minutes, and it remembers where you stopped. Answer every green box, then tick it off on the unit page.", '<a class="btn pri" href="' + w.lesson + '">Open the lesson</a><a class="btn" href="#/week/' + n + '">Unit page</a>');
+    if (!st.tasks.read) {
+      var lp = lessonProg(n), pt = progText(n);
+      if (lp && lp.done >= lp.total) return line("Tick off the lesson", pt + " Tick the first task on the unit page to move on.", '<a class="btn pri" href="#/week/' + n + '">Unit page</a>');
+      return line(lp && lp.done ? "Keep reading" : "Read the lesson", (pt ? pt + " " : "") + "It is split into sittings of 30 to 45 minutes, and it remembers where you stopped. Answer every green box, then tick it off on the unit page.", '<a class="btn pri" href="' + w.lesson + '">' + (lp && lp.done ? "Resume the lesson" : "Open the lesson") + '</a><a class="btn" href="#/week/' + n + '">Unit page</a>');
+    }
     if (!tasksDone(n)) return line("Finish this unit's tasks", "Practice as much as you like while you work through them.", '<a class="btn pri" href="#/week/' + n + '">Open the tasks</a><a class="btn" href="#/practice/' + n + '">Practice questions</a>');
     if (st.review && st.review.length) return line("Clear your misses before retaking", st.review.length + " question" + (st.review.length > 1 ? "s" : "") + " on the same ideas you missed, asked a different way.", '<a class="btn pri" href="#/review/' + n + '">Clear misses</a>');
     if (!st.passed && st.nextTry && Date.now() < st.nextTry) return line("Your next exam attempt opens tomorrow", "A night's sleep between attempts makes the retake measure what you know, not what you just read. Practice is open now.", '<a class="btn pri" href="#/practice/' + n + '">Practice</a>');
@@ -404,7 +425,7 @@
     h += '<section class="weekpath"><h2>This unit, step by step</h2><ol class="vrail">';
     h += stepHead(0, "Find your floor", "Five questions before the lesson, so you know what is new. Not graded.", "5 min") +
       (st.pretest ? '<p class="sdone">Done. You got ' + st.pretest.score + " of " + st.pretest.n + '.</p><a class="btn sm" href="#/pretest/' + n + '">Do it again</a>' : '<a class="btn pri" href="#/pretest/' + n + '">Start</a>') + "</div></li>";
-    h += stepHead(1, "Read the lesson", "The full story in sittings of 30 to 45 minutes, with every interactive. It remembers where you stopped. Answer every green box, then tick the first task below.", "3 to 4 sittings") + '<a class="btn' + (S5[1].now ? " pri" : "") + '" href="' + w.lesson + '">Open the ' + esc(lbl(n)) + " lesson</a></div></li>";
+    h += stepHead(1, "Read the lesson", "The full story in sittings of 30 to 45 minutes, with every interactive. It remembers where you stopped. Answer every green box, then tick the first task below.", "3 to 4 sittings") + (progText(n) ? '<p class="sdone">' + progText(n) + "</p>" : "") + '<a class="btn' + (S5[1].now ? " pri" : "") + '" href="' + w.lesson + '">' + ((lessonProg(n) || {}).done ? "Resume" : "Open") + " the " + esc(lbl(n)) + " lesson</a></div></li>";
     h += stepHead(2, "Practice, any time", "Unlimited questions with explanations. Questions you miss come back more often, calculation questions get new numbers every time, and once you have passed a unit about a third of the questions come from earlier units.", "15 min sets") + '<div class="row"><a class="btn" href="#/practice/' + n + '">Practice</a><span class="meta">' + S5[2].note + "</span></div></div></li>";
     var td = w.tasks.filter(function (t) { return st.tasks[t.id]; }).length;
     h += stepHead(3, "Tasks", td + " of " + w.tasks.length + " done.") + '<div class="tasks">';
