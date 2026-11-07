@@ -1,0 +1,211 @@
+[[CH sides|Who is on the other side]]
+
+[[STEP aggressor|Equal amounts, unequal hurry]]
+<p>Go back to the second warm up question. Every contract bought is a contract sold, so buying and selling are always exactly equal. Saying there were more buyers than sellers is, taken literally, impossible.</p>
+<p>What can be unequal is urgency. In every trade one side was waiting and one side arrived and crossed the spread. The one who crossed is called the aggressor. On the tape in Chapter 2 the colored dot showed exactly this, blue when the buyer crossed and red when the seller did. When aggressive buyers keep taking the asks faster than new asks arrive, the price climbs. When aggressive sellers keep hitting the bids, it falls.</p>
+<p>So the useful question about any market move is never who is buying. It is who is in a hurry, and who is willing to wait for them.</p>
+
+[[STEP mm|The people who wait for a living]]
+<p>Someone has to be willing to wait on both sides, all day, or there would be no book to trade against. The firms that do this as a business are called market makers. A market maker posts a bid and an ask at the same time, say 5,999.75 and 6,000.00. If one trader sells to their bid and another buys from their ask, the market maker has bought low and sold high and earned the spread, one tick, without caring which way the market went.</p>
+<p>That is the dream. The risk is that the two halves do not arrive together. If sellers keep hitting the market maker's bid while nobody buys from the ask, the market maker piles up contracts while the price falls. Contracts held like this are called inventory, and inventory in a falling market loses money fast. It is the adverse selection problem from Chapter 4 at industrial scale.</p>
+<p>So a market maker has one strong defense. When the market becomes confusing or violent, they widen their prices, shrink their sizes, or pull their orders entirely. Their liquidity is a choice they make second by second, not a promise.</p>
+<p>Today most market making is done by computer programs that react in millionths of a second. Firms whose programs trade at that speed are called high frequency traders, or HFTs. Not every HFT is a market maker, but most market making is high frequency.</p>
+<aside class="wonder"><p class="lab">What was a stub quote?</p><p>In 2010 some market makers in stocks were required to keep a bid and an ask in the book at all times. When they did not want to trade, they met the rule with a bid of one cent and an ask of $100,000, prices so absurd nobody would ever hit them. Those placeholder orders were called stub quotes. Hold onto that, because on May 6 somebody hit them.</p></aside>
+
+[[STEP others|Everyone else in the book]]
+<p>The other big groups in ES are easy to describe by what they need.</p>
+<ul>
+<li><b>Institutions.</b> Pension funds, mutual funds and insurers move huge amounts, often to protect a portfolio, which is called hedging. Their orders are far too big for the book, so they cut them into small slices and feed them in over time with computer programs called execution algorithms.</li>
+<li><b>Short term professionals.</b> Proprietary trading firms, which trade their own money, and hedge funds trying to profit from moves lasting seconds to days.</li>
+<li><b>Retail traders.</b> Individuals trading their own accounts. That is you, and everyone in TJR's Discord.</li>
+</ul>
+<p>Now one fact that should shape how you think about every trade you take. ES is a futures contract, and in futures every contract that exists has exactly one owner who gains when the price rises and one who gains when it falls. If the price goes up one point, every point gained by one side is a point lost by the other. Before fees, all the profits and all the losses in ES add up to exactly zero. After fees and spreads, they add up to less than zero. A market like that is called zero sum, and after costs negative sum.</p>
+<p>So when you make money day trading ES, it is not created by the economy growing. It comes out of someone else's account. Your profit has to be paid by someone who is in more of a hurry than you, who knows less than you, or who needs to trade for reasons that have nothing to do with the next ten minutes, like a fund protecting a portfolio. That is a model, and it is a simplification, but it is a useful one. Every strategy you test in this course should come with an answer to one question. Who is paying me, and why?</p>
+<aside class="mix"><p class="lab">Keep these two apart</p><p>Owning stocks for years is not zero sum, because the companies themselves earn profits that flow to shareholders. Trading ES for minutes is zero sum before costs, because over a few minutes there is no company profit to share, only a transfer between the two sides of each contract.</p></aside>
+[[MCQ
+Q: A market maker is quoting 5,999.75 bid and 6,000.00 ask in ES. Suddenly prices are falling fast and nobody knows why. What is the market maker most likely to do, and why?
+- Buy more aggressively, because prices are cheap
++ Widen or pull its quotes, because sellers keep filling its bid and it is piling up inventory as the price drops
+- Keep quoting exactly as before, because it is required to
+F: A market maker earns the spread only when buys and sells arrive in balance. In a one sided fall, its bid keeps getting filled and its inventory loses value every second. Pulling quotes is how it stops the bleeding. In ES no rule forces it to stay.
+Q: In ES, before any fees, if all day traders together made 10 million dollars of profit in a day, what must be true?
++ Other holders of ES contracts lost 10 million dollars in total that day
+- The S&amp;P 500 companies must have earned 10 million dollars
+- Nothing in particular, profits in futures come from the market growing
+F: Every ES contract has a winning side and a losing side for each move, so the totals cancel exactly before costs. Whatever one group gains, the others lose. Company profits do not enter into it over a single day.
+]]
+
+[[CH replay|Two thirty two to two forty five, replayed]]
+
+[[STEP algo|Read the seller's instructions again]]
+<p>You now know enough to read the official account of May 6 the way a trader would. It was published that September in a joint report by the two US regulators of these markets, the SEC for stocks and the CFTC for futures.</p>
+<p>The report says the selling program was told to sell 75,000 ES contracts by targeting 9 percent of the previous minute's trading volume, and to do it without regard to price or time. Volume is simply the number of contracts that traded.</p>
+<p>Translate that into the words from this page. Without regard to price means the program did not care what the bids were. It was a taker that would sell into whatever bids existed. Targeting a share of volume means its speed was tied to how much trading was happening around it. The more trading it saw, the faster it would sell. The report notes that the same seller had once run a similar program that took more than five hours. This one finished in about twenty minutes.</p>
+<p>Before you read on, predict. What happens to a program like that if trading volume suddenly explodes?</p>
+
+[[STEP potato|The hot potato]]
+<p>At first the selling was absorbed. High frequency traders and other buyers took the contracts. The report says HFTs built up a net position of about 3,300 contracts bought. But they are market makers at heart and do not want to hold inventory in a falling market, so between 2∶41 and 2∶44 they sold about 2,000 of those contracts back into the market as aggressors.</p>
+<p>Then something strange happened. With no natural buyers stepping in, the HFTs began passing contracts back and forth among themselves. Between 2∶45∶13 and 2∶45∶27, a span of fourteen seconds, HFTs traded over 27,000 contracts, about 49 percent of all volume, while their net buying was only about 200 contracts. The regulators called this hot potato trading. The same contracts were bought and sold over and over, and almost nobody was actually keeping them.</p>
+<p>Now apply your prediction. The selling program watched volume, and volume had just exploded. So it sold faster, into a market where almost nobody was really buying.</p>
+<aside class="mix"><p class="lab">Volume is not liquidity</p><p>This was one of the regulators' main lessons. Volume counts how much traded. Liquidity is how much is waiting in the book, ready to absorb a big order without the price moving. On May 6 volume was enormous and liquidity was almost gone.</p></aside>
+
+[[STEP empty|The waiting room empties]]
+<p>The report measured the book itself. By 2∶45∶28 there were fewer than 1,050 contracts of resting buy orders left in ES, less than 1 percent of the buy side depth at the start of the day. The two bars below are drawn to scale.</p>
+[[FIG depth|Resting buy orders in ES at the start of the day, compared with 2∶45∶28 pm.]]
+<p>Look at how short the second bar is. Now remember the fire widget in Chapter 4. A market order walks the book level by level, and the thinner the book, the further each order walks. ES fell about 3 percent from 2∶41 to 2∶44, then another 1.7 percent in just fifteen seconds, to a low of 1,056.</p>
+<p>Then CME's automatic safety system, called Stop Logic, switched on. Its job is to watch for a burst of triggered stop orders about to drive the price too far too fast, which is exactly the cascade from Chapter 4. At 2∶45∶28 it froze trading in ES for five seconds. In those five seconds the selling pressure partly eased and buy orders arrived. When trading resumed at 2∶45∶33, prices stabilized, and within minutes ES began to recover.</p>
+[[MCQ
+Q: Why did a 75,000 contract sell program do so much more damage on May 6 than a similar one that took five hours?
+- Because the contracts were worth more on May 6
++ It sold as a taker at a speed tied to volume, and hot potato trading inflated volume while the book emptied, so it sold fast into almost no real buyers
+- Because high frequency traders refused to trade at all
+F: The size was similar. The difference was speed and depth. Tying speed to volume backfired when volume came from HFTs trading with each other rather than from real buyers. HFTs were trading furiously, not refusing to trade, which is exactly why volume misled the program.
+Q: Five seconds of paused trading stopped the fall in ES. Using what you know about the book, what most plausibly happened in those five seconds?
++ New buy orders arrived and refilled the book, so the next market sells met real depth
+- The exchange changed the price back up
+- The sell program was cancelled by the regulators
+F: Pausing stops market orders from hitting an empty book. It gives buyers who think the price is too low time to post bids. When trading resumed the book had depth again, so sells no longer walked straight down it.
+]]
+
+[[STEP stocks|How a share reached one cent]]
+<p>The fall in ES spread straight into stocks, because the firms that trade ES also trade the stocks inside the S&amp;P 500 and the funds that hold them. Around 2∶45, the report says, many automated liquidity providers in stocks paused. Some widened their prices, some cut their sizes, and many withdrew entirely. Meanwhile stop loss sell orders were being triggered by the falling prices and met almost no buying interest.</p>
+<p>Step through what that does to the book of a single stock. The sizes are made up. The stub quote at one cent is real.</p>
+[[STEPPER crash]]
+<p>Here is what just happened, and it is the whole answer.</p>
+<p>A market sell order has one instruction, sell now to the best bid that exists. It does not check whether that bid is sane. When the real bids were pulled, the best bid that existed was a market maker's one cent placeholder, so that is where the trade happened. The one cent seller was not choosing one cent. They had chosen a market order, or a stop that becomes one, and the book chose one cent for them.</p>
+<p>Now go back to the fire widget in Chapter 4 and pick the third preset, a stock at 2∶47 pm on May 6. Sell 1,000 shares and read your average price.</p>
+
+[[STEP answer|The answer to the one question]]
+<p>A price is the last trade between two orders. Behind it there is only the book, the list of people willing to wait, and that list exists only as long as each of them keeps choosing to stay. On May 6 a seller who did not care about price met a book whose depth had been drained. The firms that normally wait pulled out, stops turned into market orders, and market orders accepted the best bid that was left. For Accenture, for a moment, the best bid was one cent.</p>
+<p>The aftermath fits the same picture. Between 2∶40 and 3∶00 more than 20,000 trades in over 300 securities, many of them funds that hold baskets of stocks, executed at prices 60 percent or more away from where they had been at 2∶40. After the close the exchanges cancelled those trades as clearly erroneous. Later that year regulators banned stub quotes and added automatic five minute pauses for single stocks that move 10 percent in five minutes.</p>
+<p>Notice what the cancellation means for you. Nobody would have cancelled a trade that went 3 percent against you because the book was thin. They only cancelled the absurd ones. Ordinary slippage in a thin book is your cost, every time.</p>
+[[MCQ
+Q: A friend says the flash crash proves that Accenture's real value dropped for a few minutes. What is the best correction?
+- Correct, the market is always right about value
++ The price is just the last trade. It dropped because the bids disappeared and market sell orders hit a one cent placeholder, not because anyone revalued the company
+- The price never really reached one cent, it was a data error
+F: The trades really happened, which is why they had to be cancelled afterwards. But they reflected an empty book, not an opinion about the company. Price and value came apart because the machinery of waiting orders broke down.
+Q: Which order type protected sellers from being filled at one cent, and what did it risk?
+- A market order, at the risk of a slow fill
+- A stop order, at the risk of triggering early
++ A limit sell, at the risk of not being filled at all while the price kept falling
+F: A limit sell at, say, $39.00 can never fill below $39.00. On May 6 it would not have traded at one cent. The price of that protection is that if the price falls through your limit and keeps going, you are still holding the shares.
+]]
+
+[[CH charts|What your chart is made of]]
+
+[[STEP candle|A chart is a summary of the tape]]
+<p>Every trading video you have watched is built around a chart, and almost always the chart is made of candles. Now that you know what a price is, you can see exactly what a candle is.</p>
+<p>Pick a window of time, say one minute. Take every trade on the tape in that minute. From them, keep four numbers. The open is the price of the first trade in the window. The high is the highest price any trade reached. The low is the lowest. The close is the price of the last trade. Those four numbers, written OHLC, are the whole candle.</p>
+<p>The thick part, called the body, spans from the open to the close. The thin lines above and below it, called wicks, reach to the high and the low. Here is how the two kinds look in this lesson.</p>
+[[FIG anatomy|An up candle, where the close is above the open, drawn hollow. A down candle, where the close is below the open, drawn filled.]]
+<p>Look at which end of the body is the open in each candle. On the hollow one the open is at the bottom, because the price rose. On the filled one the open is at the top. On TradingView and on TJR's charts the same candles are colored green and red. This page uses hollow and filled because red already means sellers here. Under most charts there is also a bar showing volume, the number of contracts that traded in that window.</p>
+
+[[STEP build|Your turn. Watch a minute become a candle]]
+<p>On the left of each frame is every trade in one minute of ES, plotted in time order, each gold dot one trade. On the right is the candle those trades have built so far. Step through and watch which events change the candle and which do not.</p>
+[[STEPPER minute]]
+<p>Two things to take from that. The candle changes only when a trade sets a new high, sets a new low, or becomes the latest price. Everything else that happened is gone. And the color can flip during the minute, so a candle that is still forming can mislead you until it closes.</p>
+
+[[STEP nest|Candles nest inside each other]]
+<p>A 5 minute candle is not a separate kind of thing. It is just a candle drawn over a longer window, so you can build it from five 1 minute candles. Its open is the open of the first one. Its close is the close of the last one. Its high is the highest high among the five, and its low is the lowest low.</p>
+[[FIG five|Five 1 minute candles of ES, numbered in time order, and the single 5 minute candle they make.]]
+<p>Check it against the picture. The open of candle 1 is 6,000.00 and the close of candle 5 is 6,001.00. The highest high is in candle 3 at 6,002.50, and the lowest low is in candle 4 at 5,998.75. Those four numbers are exactly the 5 minute candle on the right. This matters later, because TJR style analysis constantly switches between timeframes, and all of them are the same tape cut into different windows.</p>
+[[MCQ
+Q: Three 1 minute candles in order are O 6,010.00 H 6,012.25 L 6,009.50 C 6,011.75, then O 6,011.75 H 6,011.75 L 6,007.00 C 6,008.25, then O 6,008.25 H 6,010.50 L 6,008.00 C 6,010.00. What is the 3 minute candle?
+- O 6,010.00 H 6,012.25 L 6,008.00 C 6,010.00
++ O 6,010.00 H 6,012.25 L 6,007.00 C 6,010.00
+- O 6,008.25 H 6,012.25 L 6,007.00 C 6,011.75
+F: Open of the first, 6,010.00. Highest high, 6,012.25, in the first candle. Lowest low, 6,007.00, in the second. Close of the last, 6,010.00. The tempting wrong answer took the low from the last candle instead of the lowest of all three.
+Q: What does that 3 minute candle look like?
+- A filled candle, because the middle minute fell hard
+- A hollow candle, because the high is far above the open
++ Almost no body at all, because it closed exactly where it opened, with wicks up to 6,012.25 and down to 6,007.00
+F: The open and the close are both 6,010.00, so the body has no height and the candle is a flat line with two wicks. The fall inside the middle minute has vanished. Only the four numbers survive.
+]]
+
+[[STEP hides|Your turn. What a candle cannot tell you]]
+<p>Here are two different minutes of trading. Flip between them and compare the paths on the left, then compare the candles on the right.</p>
+[[TOGGLE paths]]
+<p>Here is what just happened. In minute A buyers won early, lost the middle, and won the end. In minute B sellers won early and buyers won the rest. Those are opposite stories, and they produce exactly the same candle, because both have the same open, high, low and close.</p>
+<p>A candle also hides everything you spent this week learning. It does not show the book. It does not show who was the aggressor. It does not show the stops waiting below, or whether the volume was real buyers or HFTs passing a hot potato. The May 6 candle for Accenture is a long wick down to one cent, and nothing in it tells you the cause.</p>
+<p>That is not a reason to ignore charts. It is the reason this course will treat every chart pattern you learn in Weeks 4 to 7 as a claim to be tested on data, not a fact to be believed. When a video tells you what a candle shape means, remember that the shape is four numbers, and the story is a guess about a path nobody drew.</p>
+
+[[CH alone|On your own]]
+
+[[STEP prob|One full problem]]
+<p>Work this one straight through on paper first, then check each part. Here is the ES book at 10∶15 on an ordinary morning.</p>
+<div class="scroll"><table class="tbl center">
+<tr><th>Bids, contracts</th><th>Price</th><th>Asks, contracts</th></tr>
+<tr><td></td><td>6,001.00</td><td>30</td></tr>
+<tr><td></td><td>6,000.75</td><td>12</td></tr>
+<tr><td></td><td>6,000.50</td><td>8</td></tr>
+<tr><td>6</td><td>6,000.25</td><td></td></tr>
+<tr><td>15</td><td>6,000.00</td><td></td></tr>
+<tr><td>25</td><td>5,999.75</td><td></td></tr>
+</table></div>
+<p class="cap">Above 6,001.00 and below 5,999.75 the book continues, but you will not need those levels.</p>
+[[MCQ
+Q: Part 1. What are the spread and the mid price?
++ Spread 0.25 points, mid 6,000.375
+- Spread 0.50 points, mid 6,000.50
+- Spread 0.25 points, mid 6,000.50
+F: Best ask 6,000.50 minus best bid 6,000.25 is 0.25, a single tick, which is normal for ES. The mid is halfway, 6,000.375, a price that cannot even trade, since ES moves in quarters.
+Q: Part 2. A trader sends a market buy for 15 contracts. What is their average price, to two decimals?
+- 6,000.50
+- 6,000.75
++ 6,000.62
+F: They take all 8 at 6,000.50, then 7 of the 12 at 6,000.75. That is 48,004.00 plus 42,005.25, which is 90,009.25, divided by 15, which is about 6,000.617. Slippage is about 0.12 points per contract compared with the best ask.
+Q: Part 3. Go back to the original book. Traders who bought earlier have stop sells totalling 20 contracts with a trigger at 6,000.25. A seller sends a market sell for 6. Where is the last price once everything has finished trading?
+- 6,000.25
+- 6,000.00
++ 5,999.75
+F: The 6 contract sell takes all 6 bids at 6,000.25. That trade touches the trigger, so 20 contracts of market sells wake up. They take all 15 at 6,000.00 and then 5 of the 25 at 5,999.75. One small sale moved the price two ticks, because it released orders nobody could see.
+Q: Part 4. You want to buy 2 contracts, you are in no hurry, and you think the price is fair right here. Which order fits, and what is the catch?
+- A market buy, and the catch is that it might not fill
++ A limit buy at 6,000.25, joining the best bid, and the catch is that you are behind 6 contracts in line and might never fill
+- A limit buy at 6,001.00, and the catch is that it rests in the book for a long time
+F: Joining the bid saves you the spread, but you go to the back of the line at 6,000.25. A limit buy at 6,001.00 would not rest at all, it would trade at once against the asks, starting at 6,000.50. Its price reaches the other side, so it is a taker.
+]]
+
+[[STEP mixed|Mixed questions, the way the exam asks them]]
+<p>The weekly exam mixes everything, so this last set does too. Answer each one before reading the feedback.</p>
+[[MCQ
+Q: Which of these would most likely make the ES spread widen?
+- A quiet lunch hour with steady two way trading
++ The second before a major economic number is released, when market makers pull their quotes
+- A large limit order resting at the best bid
+F: Market makers fear being run over by a sudden move, so they step back right before scheduled news. With fewer orders at the front, the best bid and best ask move apart. A big resting bid makes the book deeper, not the spread wider.
+Q: The tape shows a big trade at the ask. Who was the aggressor?
++ The buyer, who crossed the spread to trade at the ask
+- The seller, because the seller set the price
+- Nobody, at the ask both sides are equal
+F: A trade at the ask means a buyer accepted a resting sell order's price. The seller was waiting. The buyer arrived and crossed, so the buyer was the aggressor.
+Q: Why does a limit buy order tend to get filled right before the price falls further?
+- Because exchanges fill limit orders last
+- Because limit orders always have worse prices
++ Because it fills when sellers are hitting the bids hard, which is also when the price is most likely to keep dropping
+F: Your resting buy is filled by somebody else's urgency to sell. That urgency is itself a sign of falling prices. This is adverse selection, and it is the hidden cost of always waiting.
+Q: A candle's open is 6,004.00 and its close is 6,002.50. Its high is 6,006.25. Which statement must be true?
+- It is a hollow candle
+- The highest trade happened after the open
++ It is a filled candle with an upper wick reaching 6,006.25
+F: The close is below the open, so it is filled. The high is above the open, so there is an upper wick. You cannot tell when the high happened. That timing is exactly what a candle throws away.
+]]
+
+[[CLOSE]]
+
+<section id="proc" class="tail">
+<h2>Before you send any order</h2>
+<ol class="proc">
+<li>Read the best bid, the best ask and the spread. Remember the last price is just the most recent trade. <a href="#[[A spread]]">[[S spread]]</a></li>
+<li>Decide whether you need to trade now or can wait. Now means a taker order and paying the spread. Waiting means a limit order and the risk of no fill or a bad fill. <a href="#[[A bargain]]">[[S bargain]]</a></li>
+<li>Compare your size with the depth at the best levels and estimate your average price before you press anything. <a href="#[[A fire]]">[[S fire]]</a></li>
+<li>Ask where other people's stops are likely to sit, because those are hidden market orders. <a href="#[[A stops]]">[[S stops]]</a></li>
+<li>Remember that thin books, the seconds around news, and fast markets make every taker order more expensive. <a href="#[[A empty]]">[[S empty]]</a></li>
+<li>Read the chart as a summary of trades. It shows where price went, never the book, and never why. <a href="#[[A hides]]">[[S hides]]</a></li>
+</ol>
+<h2>The whole story in one breath</h2>
+<p>A price is only the last trade between a buyer and a seller. Most of the time one of them was waiting in the order book with a limit order and the other arrived with a market order and crossed the spread. Prices move when takers eat through the waiting orders, and they move furthest when the book is thin. On May 6, 2010, a seller who ignored price met a book that market makers had emptied, stop orders turned into market orders, and a share of Accenture sold for one cent because one cent was the best bid left.</p>
+<h2>Before the exam, teach it back</h2>
+<p>Open the Academy page and write, in your own words, how a share of a forty dollar company traded for one cent. Explain it to someone who has never heard the words bid, ask, spread, limit order or stop, defining each one as you use it. Then paste it to Claude to be graded before you take the Week 1 exam.</p>
+</section>

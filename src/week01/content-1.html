@@ -1,0 +1,167 @@
+<header class="hero">
+<p class="course">Trading Academy. Week 1 of 12. Foundations</p>
+<h1>A share for one cent</h1>
+<p class="sub">On one afternoon in 2010 a share of a forty dollar company traded for a penny, and nothing about the company had changed. By the end of this page you will be able to explain exactly how, and every piece of that explanation is something you will touch on every trade you ever make. You will be quizzed the whole way.</p>
+</header>
+
+<nav id="contents" class="toc">
+<h2 class="toch">The story</h2>
+<ol>[[TOC]]</ol>
+<p class="tocnote">Green boxes are where you do something. Answer every one before reading on. The weekly exam on the Academy page draws from exactly these ideas, and it needs 100% to unlock Week 2.</p>
+</nav>
+
+[[CH open|Forty dollars, then one cent]]
+
+[[STEP may6|The afternoon of May 6, 2010]]
+<p>It was a Thursday, and it was already a nervous day. Greece was close to defaulting on its debt, and US stocks had been sliding since the morning.</p>
+<p>At 2∶32 in the afternoon, a large mutual fund company in Kansas, later named in the press as Waddell and Reed, switched on a computer program. Its job was to sell 75,000 contracts of something called the E-mini S&amp;P 500, worth about 4.1 billion dollars. The firm wanted protection in case the stock market kept falling.</p>
+<p>The E-mini S&amp;P 500, usually just called ES, is a futures contract whose price tracks the S&amp;P 500, an index made from the stock prices of 500 large US companies. Week 2 explains exactly what a futures contract is. For now you only need one fact about it. It is one of the most heavily traded contracts in the world, and together with its Nasdaq cousin, NQ, it is what day traders like TJR mostly trade.</p>
+<p>Between 2∶41 and 2∶45, in under five minutes, ES fell more than 5 percent. Then the damage spread into ordinary stocks. Accenture, a huge consulting company, was trading at $39.98 at 2∶46. At 2∶49 a trade printed at one cent. By 2∶50 it was back at $39.51. In the same few minutes, a few trades in Apple printed near $100,000 a share.</p>
+
+[[STEP question|The one question]]
+<p>Look at what changed for Accenture in those three minutes. Its offices, its clients, its contracts and its profits were exactly the same at 2∶49 as they were at 2∶46. Nobody had discovered a scandal. The company did not change at all.</p>
+<p>And yet a share of it changed hands for one cent.</p>
+<p>So this whole page answers one question. What is a price, really, such that the same share can be worth forty dollars and one cent within the same three minutes?</p>
+<p>This matters to you more than it seems. Every trade you ever make goes through the exact machine that broke that afternoon. The way you send an order decides what you pay on every single trade, and over hundreds of trades that cost is often the difference between a strategy that makes money and one that loses it. By the last chapter you will replay the crash yourself and watch the one cent trade happen.</p>
+<p>First, a quick check of where your picture of a price starts.</p>
+[[MCQ
+Q: Before reading on, which of these is closest to how a stock or futures price is set?
+- The exchange calculates a fair price from the company's value and posts it
++ It is simply the price at which the most recent trade happened
+- It is an average of what all buyers and sellers would like to pay
+F: It is the most recent trade, nothing more. No exchange and no committee calculates a fair price. The next chapter shows why that one fact makes a one cent trade possible.
+Q: When more people want to buy a stock than sell it, what happens to the number of shares bought compared with the number sold that day?
+- More shares are bought than sold
+- More shares are sold than bought
++ They are always exactly equal
+F: Every share bought was sold by someone. Each trade has exactly one buyer and one seller for the same quantity. What can be unbalanced is not the amount bought and sold but how eager each side is. Chapter 5 is about exactly that.
+]]
+
+[[CH price|A price is the last handshake]]
+
+[[STEP trade|A trade is two people agreeing]]
+<p>Start with the smallest possible market. One person wants to buy one contract and another wants to sell one. If they agree on a number, say 6,000.25, the contract changes hands at 6,000.25. That event is a trade, and 6,000.25 is the price of that trade.</p>
+<p>Now scale it up to thousands of people trading thousands of times a second. Every trade gets recorded with its time, its price and its size, in a running list called the time and sales, or the tape. The price you see on any screen, the big number on a chart or a phone app, is just the price of the most recent trade on that list. It is called the last price, or simply the last.</p>
+<p>Here is a short stretch of the tape. Each row is one trade. The dot shows which side was in a hurry, an idea the next chapters will build.</p>
+[[FIG tape|Five trades from a made up minute of ES. Each row is one trade, with its time to the thousandth of a second, its price, and how many contracts changed hands.]]
+<p>Look at the bottom row. That trade, 6 contracts at 6,000.25, is the price. One second earlier the price was 6,000.00, because the trade before it happened at 6,000.00. There is nothing behind these numbers. No hidden true value is stored anywhere in the system.</p>
+<aside class="mix"><p class="lab">Keep these two apart</p><p>Value is what someone thinks a company or contract is worth. Price is a record of what two people actually agreed on a moment ago. They are usually close, because people trade near what they think things are worth. On May 6 they came apart, and nothing in the machinery forces them back together except people choosing to trade.</p></aside>
+
+[[STEP meet|Buyers and sellers never meet]]
+<p>In real markets the buyer and the seller never see each other. They do not even arrive at the same moment. A buyer might decide to buy at 10∶41 and the seller who eventually fills the order might show up at 10∶43.</p>
+<p>So the market needs a place where an order can wait until a counterpart arrives. A counterpart, or counterparty, is the person on the other side of your trade. For ES that place is a computer run by the CME Group in Aurora, Illinois. It is called the matching engine, and the electronic market it runs is called Globex. Every order from every trader in the world goes into it. It keeps a list of everyone who is waiting, and the instant two orders agree on a price, it matches them into a trade.</p>
+<p>That list of everyone waiting is the most important object in this whole course. It has a name, and the next chapter draws it.</p>
+[[MCQ
+Q: At 2∶49 on May 6 a share of Accenture traded at one cent. Using only what you have read so far, what must have been true at that moment?
++ Someone agreed to sell at one cent, and someone had an order in place to buy at one cent
+- The exchange decided Accenture was worth one cent
+- Accenture's value had briefly dropped to one cent
+F: A price is a trade, and a trade needs two agreeing sides. Somebody was willing to sell for a penny and somebody had a standing order to buy for a penny. Who would ever do either is the mystery the rest of the page solves.
+]]
+
+[[CH book|The waiting room]]
+
+[[STEP limit|A limit order is a promise with a price]]
+<p>The most common way to wait is a limit order. It says the quantity you want and the worst price you will accept. Buy 5 contracts at 5,999.75 or lower. Sell 3 contracts at 6,000.50 or higher. If nobody is on the other side at that price or better, the order sits in the matching engine and waits.</p>
+<p>A waiting buy order is called a bid. A waiting sell order is called an ask, or an offer. Both words mean the same thing on the sell side.</p>
+<p>The full list of all waiting limit orders, sorted by price, is the order book. The picture below is how traders draw it, and it is how every book in this course will look. Each row is one allowed price. In ES prices move in steps of 0.25 points, and one step is called a tick. Blue bars on the left are bids, and the number beside each bar is how many contracts are waiting there. Red bars on the right are asks.</p>
+[[FIG book|An order book. Rows are prices a quarter point apart. Blue bars are contracts waiting to buy, red bars contracts waiting to sell, and the outline marks the spread.]]
+<p>Read it from the middle outward. The highest blue bar is at 5,999.75. Nobody is offering to pay more than that right now, so 5,999.75 is the best bid. The lowest red bar is at 6,000.25. Nobody is willing to sell for less, so 6,000.25 is the best ask.</p>
+
+[[STEP spread|The gap that never closes]]
+<p>Between the best bid and the best ask there is always a gap. Here it is 6,000.25 minus 5,999.75, which is 0.50 points, or two ticks. That gap is the spread.</p>
+<p>Why must there be a gap? Suppose a buyer posted a bid at 6,000.25, the same price as the best ask. A buyer willing to pay 6,000.25 and a seller willing to accept 6,000.25 agree, so the matching engine would trade them instantly. The bid would never get to sit in the book. So a resting bid is always below every resting ask. The moment they would touch, they trade.</p>
+<p>The halfway point between best bid and best ask is called the mid price. Here it is 6,000.00. Notice that no trade has to happen at the mid. It is just arithmetic.</p>
+<p>The rest of the book, all the bars behind the best levels, is called depth. Depth tells you how much could trade before the price has to move. Keep that sentence in mind, because on May 6 the depth is what disappeared.</p>
+<aside class="wonder"><p class="lab">You might be wondering</p><p>How wide is the spread in real ES? During normal US trading hours it is almost always one tick, a quarter of a point, because so many traders compete to be at the front. The two tick spread in the picture is there so you can see the gap clearly.</p></aside>
+
+[[STEP buildit|Your turn. Build a book one order at a time]]
+<p>Step through the six stages below. Each stage adds one event. Read the line under each picture before you press Next, and watch for the moment something turns gold, because gold always means a trade actually happened.</p>
+[[STEPPER build]]
+<p>Here is what just happened.</p>
+<p>For four stages nothing traded at all. Orders arrived and waited, and the book grew. A book can be full of activity and still have no trades.</p>
+<p>Then in stage 5 a seller arrived whose price reached the best bid. The trade happened at 5,999.75, the price of the order that was already waiting. That is a general rule. When a new order matches a resting one, the trade happens at the resting order's price. The trader who waited set the price, and the trader who arrived accepted it.</p>
+<p>And in stage 6 someone simply left. Nobody is obliged to keep an order in the book.</p>
+[[MCQ
+Q: A book shows best bid 6,000.00 and best ask 6,000.50. What are the spread and the mid price?
+- Spread 0.25, mid 6,000.25
++ Spread 0.50, mid 6,000.25
+- Spread 0.50, mid 6,000.50
+F: The spread is 6,000.50 minus 6,000.00, which is 0.50 points, two ticks. The mid is halfway between them, 6,000.25. No trade needs to happen at the mid. It is just the center of the gap.
+Q: The best ask is 6,000.25. A buyer sends a limit buy for 2 contracts at 6,000.50. At what price do they trade?
++ 6,000.25
+- 6,000.50
+- Halfway, at 6,000.375
+F: The buyer was willing to pay up to 6,000.50, but a seller was already waiting at 6,000.25. Trades happen at the resting order's price, so the buyer gets the better price, 6,000.25. A limit is the worst price you accept, not the price you must pay.
+Q: Why can a resting bid never be at or above the best ask?
+- The exchange forbids buyers from bidding that high
+- Market makers would complain
++ It would match the ask immediately and trade, so it could never be resting
+F: A bid at or above the best ask agrees with a seller on price, so the matching engine trades them on the spot. Whatever remains in the book afterwards has to sit below the asks.
+]]
+
+[[STEP queue|First come, first served]]
+<p>Often many traders want the same price. Five people might all be bidding 5,999.75. When a seller arrives at that price, who gets the trade?</p>
+<p>On CME Globex, for ES, the answer is whoever got there first. The matching engine keeps every price level as a line, in the order the orders arrived. This rule is called price time priority. The best price trades first, and among orders at the same price, the earliest one trades first. It is also called FIFO, short for first in, first out. The picture shows three sellers lined up at one price and a buyer arriving.</p>
+[[FIG queue|One price level drawn as a line of three sell orders. Gold is the part that traded.]]
+<p>Look at seller C. C wanted to sell at exactly the same price as A, and still sold nothing, purely because C arrived later. This is why speed matters so much to the firms that make markets. Being first in line is worth money, and some firms spend millions on equipment to save a few millionths of a second.</p>
+<p>For you it means something simpler. If you join the best bid with a limit order, you go to the back of a line that may hold hundreds of contracts. The price can touch your level and leave again without you ever being filled.</p>
+<aside class="flag"><p class="lab">Not every market works this way</p><p>Some contracts on CME, mostly certain interest rate futures, split incoming trades among everyone at the price in proportion to their size instead. ES and the Nasdaq contract NQ, the ones this course uses, are first in, first out.</p></aside>
+
+[[CH orders|Two ways to send an order]]
+
+[[STEP market|The market order]]
+<p>A limit order says how much and at what worst price, and then it may wait. There is a second kind of order that never waits. A market order says only how much. Buy 10 now. It trades immediately against whatever is resting on the other side, starting at the best price and working outward until it is filled.</p>
+<p>That gives two kinds of trader in every trade. The one whose order was resting in the book is called the maker, because their order made the market that the other person traded against. The one who arrived and traded at once is called the taker. Resting orders are what let someone trade instantly, and that supply of waiting orders is what traders mean by liquidity. Makers provide liquidity. Takers use it up.</p>
+<p>A market buy always trades at the ask, and a market sell always trades at the bid. So if you buy with a market order and immediately sell with another, you lose the spread, even if the price never moves. The spread is the price of being in a hurry.</p>
+
+[[STEP fire|Your turn. Fire market orders into a real shaped book]]
+<p>This one is the heart of the week. Below is a live book. Start with the first preset, ES on a normal afternoon. Press Buy 1, then look at what you paid. Press the reset button, then press Buy 600 and compare. Then try the thin book with the same kind of order. Save the third preset for the end of Chapter 6, where the story needs it, or try it now if you cannot wait.</p>
+[[CUSTOM fire]]
+<p>Three things to take from that.</p>
+<p>First, a small market order pays exactly the best price. One contract bought at the best ask moves nothing except the size that was waiting there.</p>
+<p>Second, a big market order eats through the book one level at a time. It takes everything at the best ask, then everything at the next price, and so on. Your average price ends up worse than the best price you saw when you pressed the button. That difference is called slippage. You did not just pay the price. You moved it, and the last trade ended up where your order stopped.</p>
+<p>Third, the same order does far more damage in a thin book. Nothing about the contract changed between the first two presets. Only the depth did.</p>
+
+[[STEP whymoves|This is the only reason a price ever moves]]
+<p>You have now seen the mechanism behind every move on every chart. The price goes up when buy orders arrive that are big enough or eager enough to take all the asks at one level, so the next trade has to happen at the next level up. The price goes down when market sells, or sells priced at the bid, eat through the bids.</p>
+<p>News, earnings and opinions matter only through this door. A good earnings report moves a price because it makes some people send buy orders that cross the spread and eat the asks. If nobody acted on the news, the price would not move at all.</p>
+<p>So when a trader says buyers are in control, the honest translation is that buy orders are taking liquidity faster than sellers are putting new asks into the book.</p>
+[[MCQ
+Q: The asks are 10 contracts at 6,000.25, 10 at 6,000.50 and 20 at 6,000.75. You send a market buy for 25. What is your average price?
+- 6,000.25
++ 6,000.45
+- 6,000.50
+F: You take 10 at 6,000.25, 10 at 6,000.50, and the last 5 at 6,000.75. That costs 60,002.50 plus 60,005.00 plus 30,003.75, which is 150,011.25 for 25 contracts. Divide and you get 6,000.45. The best ask was 6,000.25, so your slippage is 0.20 points per contract.
+Q: In the problem above, what is the last price right after your order?
+- 6,000.25
+- 6,000.50
++ 6,000.75
+F: Your final 5 contracts traded at 6,000.75, so that is the most recent trade, and the most recent trade is the price. One order moved the price two ticks.
+Q: You buy 1 ES contract with a market order when the book is best bid 5,999.75 and best ask 6,000.00, then instantly sell it with another market order. Nothing else changes. What happened?
++ You lost 0.25 points, the spread
+- You broke even, because the price did not move
+- You made 0.25 points
+F: You bought at the ask, 6,000.00, and sold at the bid, 5,999.75. The market did not move at all and you are still down one tick. Every round trip with market orders starts with this loss, before any fees.
+]]
+
+[[STEP bargain|What a limit order costs you instead]]
+<p>If market orders pay the spread, why not always use limit orders and collect it instead?</p>
+<p>Because waiting has its own price. The first part is obvious. A limit order might never fill. You can bid 5,999.75, watch the market touch 5,999.75 while you sit at the back of the line, and then watch it rally two points without you.</p>
+<p>The second part is subtle and it matters more. Think about when your resting buy order does get filled. It gets filled when somebody sells to you, and that most often happens when sellers are hitting the bids hard, which is exactly when the price is about to go lower. Your limit buy tends to fill on the moves that go against you, and tends to miss the moves that go your way. This trap is called adverse selection. The orders that fill you are, on average, from the people who are in a hurry, and sometimes they are in a hurry because they know something.</p>
+<p>So neither order is free. A market order pays a known, small cost every time. A limit order pays an unknown cost in missed trades and in bad fills. Choosing between them is a real decision on every trade, and you will practice it.</p>
+<aside class="breath"><p class="lab">In one breath</p><p>A limit order rests and waits, provides liquidity, and risks never filling or filling at the worst moment. A market order takes liquidity, fills now, and pays the spread plus slippage. The trade always happens at the waiting order's price.</p></aside>
+
+[[STEP stops|The order nobody can see]]
+<p>There is one more order type, and it is the one that turns a dip into a collapse. A stop order is an instruction that sits outside the book, completely invisible to other traders. It contains a trigger price. Nothing happens until a trade prints at the trigger. Then the stop wakes up and becomes a market order.</p>
+<p>The most common use is the stop loss. You buy at 6,000.00 and place a stop sell with a trigger at 5,997.00. If the price falls to 5,997.00, your stop becomes a market sell and gets you out before the loss grows. Almost every disciplined trader uses one, and you will too.</p>
+<p>Now picture many traders who all bought near the same price and all put their stops just below the same obvious level. Step through what happens when the price reaches it. The dashed box is the group of stop orders, drawn outside the book because the book does not contain them.</p>
+[[STEPPER stops]]
+<p>Here is what just happened. One ordinary sale of 6 contracts touched the trigger, and that one trade released 20 contracts of market selling that had been hidden until that instant. The selling ate four levels of bids. A small push became a fast drop, made entirely of other people's protective orders.</p>
+<p>This is a big idea and it will come back. In Week 5 you will study why prices so often seem to be pulled toward obvious highs and lows. The honest reason is this picture. Clusters of stops are clusters of future market orders, and anyone who needs to buy or sell a lot knows they are there.</p>
+<aside class="wonder"><p class="lab">You might be wondering</p><p>Is there a version that cannot slip like that? Yes. A stop limit order becomes a limit order instead of a market order when triggered, so it will never fill at a terrible price. The cost is that in a fast drop it may not fill at all, and you stay in a losing trade while the price falls past you.</p></aside>
+
+[[STEP sortit|Your turn. Maker or taker?]]
+<p>Below are seven orders. For each one, decide whether it rests in the book and adds liquidity, or trades at once and takes liquidity. The book is the same in every case unless the order says otherwise. Best bid 5,999.75, best ask 6,000.00. Watch out for the ones where the type of order and what it actually does disagree.</p>
+[[CLASSIFY mt]]
+<p>The traps in that set were orders three and five. A limit order is not automatically a maker. If its price reaches the other side of the book, it trades at once just like a market order. What decides whether you make or take is not the name of the order. It is whether your price reaches the waiting orders on the other side.</p>
