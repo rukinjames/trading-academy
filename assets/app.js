@@ -215,7 +215,7 @@
   function itemById(b, id) { return b.items.filter(function (i) { return i.id === id; })[0]; }
   function grade(inst, ans) {
     if (inst.type === "mcq") return ans != null && inst.choices[ans] && inst.choices[ans].ok;
-    var x = parseFloat(String(ans == null ? "" : ans).replace(/,/g, "").replace(/−/g, "-"));
+    var x = parseFloat(String(ans == null ? "" : ans).replace(/[,$\s%]/g, "").replace(/−/g, "-"));
     return !isNaN(x) && Math.abs(x - inst.answer) <= inst.tol;
   }
   function rightText(inst) {
