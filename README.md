@@ -22,6 +22,7 @@ data/bank-diagnostic.js
 data/bank-wNN.js      one question bank per built week
 lessons/weekNN.html   built lesson pages (single offline files)
 src/weekNN/           lesson sources (lesson.py and content files) for the feynman lesson builder
+trainer/              Trading Desk Trainer, a separate offline app (installable, own service worker)
 ```
 
 ## Adding a week (notes for Claude)
